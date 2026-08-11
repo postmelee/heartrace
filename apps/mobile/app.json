@@ -1,0 +1,39 @@
+{
+  "expo": {
+    "name": "심장 달리기",
+    "slug": "heartrace",
+    "version": "0.1.0",
+    "icon": "./assets/icon.png",
+    "scheme": "heartrace",
+    "orientation": "portrait",
+    "userInterfaceStyle": "light",
+    "runtimeVersion": {
+      "policy": "fingerprint"
+    },
+    "ios": {
+      "supportsTablet": false,
+      "bundleIdentifier": "art.heartrace.mobile",
+      "buildNumber": "1",
+      "associatedDomains": ["applinks:heartrace-postmelee.onrender.com"],
+      "infoPlist": {
+        "NSCameraUsageDescription": "손가락의 미세한 색 변화를 읽어 심박수를 측정하기 위해 카메라를 사용합니다.",
+        "ITSAppUsesNonExemptEncryption": false
+      }
+    },
+    "android": {
+      "package": "art.heartrace.mobile",
+      "versionCode": 1,
+      "permissions": ["android.permission.CAMERA"]
+    },
+    "plugins": ["expo-font"],
+    "experiments": {
+      "typedRoutes": false
+    },
+    "extra": {
+      "eas": {
+        "projectId": "2b1c4508-6a48-478c-ba85-0a61ad2608ad"
+      }
+    },
+    "owner": "postmelee"
+  }
+}

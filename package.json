@@ -1,0 +1,35 @@
+{
+  "name": "heartrace",
+  "version": "0.1.0",
+  "private": true,
+  "description": "심장으로 달리는 참여형 전시 — Heart Race",
+  "workspaces": [
+    "apps/*",
+    "packages/*"
+  ],
+  "scripts": {
+    "dev": "concurrently -n server,host -c cyan,magenta \"npm run dev -w @heartrace/server\" \"npm run dev -w @heartrace/host\"",
+    "dev:server": "npm run dev -w @heartrace/server",
+    "dev:host": "npm run dev -w @heartrace/host",
+    "dev:mobile": "npm run start -w @heartrace/mobile",
+    "build": "npm run build --workspaces --if-present",
+    "typecheck": "npm run typecheck --workspaces --if-present",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "smoke": "tsx scripts/smoke-race.ts",
+    "format": "prettier --write .",
+    "check": "npm run typecheck && npm test && npm run build"
+  },
+  "devDependencies": {
+    "@types/node": "^24.10.0",
+    "concurrently": "^9.2.1",
+    "prettier": "^3.6.2",
+    "socket.io-client": "4.8.3",
+    "tsx": "^4.21.0",
+    "typescript": "~6.0.3",
+    "vitest": "^4.0.17"
+  },
+  "engines": {
+    "node": ">=22"
+  }
+}

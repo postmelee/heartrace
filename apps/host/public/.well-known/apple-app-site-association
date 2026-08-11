@@ -1,0 +1,15 @@
+{
+  "applinks": {
+    "details": [
+      {
+        "appIDs": ["XH6JHKYXV8.art.heartrace.mobile"],
+        "components": [
+          {
+            "/": "/join",
+            "comment": "심장 달리기 방 입장 링크"
+          }
+        ]
+      }
+    ]
+  }
+}
