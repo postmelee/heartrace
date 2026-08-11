@@ -9,7 +9,12 @@
       "distribution": "internal"
     },
     "preview": {
-      "distribution": "internal"
+      "distribution": "internal",
+      "env": {
+        "EXPO_PUBLIC_SOCKET_URL": "https://heartrace-api-postmelee.onrender.com",
+        "EXPO_PUBLIC_PUBLIC_URL": "https://heartrace-postmelee.onrender.com",
+        "EXPO_PUBLIC_SHOW_DIAGNOSTICS": "false"
+      }
     },
     "production": {
       "autoIncrement": true,

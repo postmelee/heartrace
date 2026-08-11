@@ -23,6 +23,7 @@ interface HostSession {
 export default function App() {
   const path = window.location.pathname.replace(/\/+$/, "") || "/";
   if (path === "/join") return <JoinLanding />;
+  if (path === "/watch") return <SpectatorApp />;
   if (path === "/privacy") return <PrivacyPage />;
   if (path === "/support") return <SupportPage />;
   return <HostApp />;
@@ -160,9 +161,17 @@ function HostApp() {
     );
   }
 
+  const watchUrl = new URL("/watch", PUBLIC_URL);
+  watchUrl.searchParams.set("room", room.code);
+
   return (
     <main className="app-shell">
-      <TopBar connected={connected} code={room.code} onLeave={leaveRoom} />
+      <TopBar
+        connected={connected}
+        code={room.code}
+        onLeave={leaveRoom}
+        watchUrl={watchUrl.toString()}
+      />
       {room.phase === "lobby" && (
         <Lobby
           room={room}
@@ -186,6 +195,144 @@ function HostApp() {
       {room.phase === "finished" && (
         <Finish room={room} busy={busy} onReset={resetRace} />
       )}
+    </main>
+  );
+}
+
+function SpectatorApp() {
+  const roomCode = new URLSearchParams(window.location.search)
+    .get("room")
+    ?.trim()
+    .toUpperCase()
+    .slice(0, 4);
+  const [connected, setConnected] = useState(false);
+  const [room, setRoom] = useState<RoomSnapshot | null>(null);
+  const [error, setError] = useState<string | null>(null);
+  const [beatEffects, setBeatEffects] = useState<Record<string, AcceptedBeat>>(
+    {},
+  );
+
+  useEffect(() => {
+    if (!roomCode) return;
+    const socket: GameSocket = io(SOCKET_URL, {
+      reconnection: true,
+      reconnectionDelay: 400,
+      timeout: 8_000,
+    });
+
+    const updateRoom = (nextRoom: RoomSnapshot) => {
+      if (nextRoom.phase === "lobby") setBeatEffects({});
+      setRoom(nextRoom);
+    };
+    const joinRoom = () => {
+      setConnected(true);
+      socket.emit("viewer:join", { roomCode }, (result) => {
+        if (result.ok) {
+          updateRoom(result.data.room);
+          setError(null);
+        } else {
+          setRoom(null);
+          setError(result.error);
+        }
+      });
+    };
+
+    socket.on("connect", joinRoom);
+    socket.on("disconnect", () => setConnected(false));
+    socket.on("connect_error", () => {
+      setConnected(false);
+      setError("경기 서버에 연결하지 못했습니다. 잠시 후 다시 시도해 주세요.");
+    });
+    socket.on("room:snapshot", updateRoom);
+    socket.on("race:finished", updateRoom);
+    socket.on("race:beat", (event) => {
+      setBeatEffects((current) => ({ ...current, [event.playerId]: event }));
+    });
+
+    return () => {
+      socket.disconnect();
+    };
+  }, [roomCode]);
+
+  if (!roomCode) {
+    return (
+      <SpectatorNotice
+        title="관전 링크를 다시 확인해 주세요."
+        description="방 코드가 포함된 관전자 링크가 필요합니다."
+      />
+    );
+  }
+
+  if (!room) {
+    return (
+      <SpectatorNotice
+        title={error ?? "경기 화면을 불러오는 중입니다."}
+        description={`방 ${roomCode} · ${connected ? "방을 확인하는 중" : "서버에 연결하는 중"}`}
+        retry={Boolean(error)}
+      />
+    );
+  }
+
+  return (
+    <main className="app-shell spectator-shell">
+      <TopBar connected={connected} code={room.code} mode="spectator" />
+      {room.phase === "lobby" && (
+        <Lobby
+          room={room}
+          busy={false}
+          error={null}
+          onStart={() => undefined}
+          onRemovePlayer={() => undefined}
+          readOnly
+        />
+      )}
+      {room.phase === "countdown" && (
+        <Countdown room={room} busy={false} onEnd={() => undefined} readOnly />
+      )}
+      {room.phase === "racing" && (
+        <Race
+          room={room}
+          beatEffects={beatEffects}
+          busy={false}
+          onEnd={() => undefined}
+          readOnly
+        />
+      )}
+      {room.phase === "finished" && (
+        <Finish room={room} busy={false} onReset={() => undefined} readOnly />
+      )}
+    </main>
+  );
+}
+
+function SpectatorNotice({
+  title,
+  description,
+  retry = false,
+}: {
+  title: string;
+  description: string;
+  retry?: boolean;
+}) {
+  return (
+    <main className="public-page spectator-notice page-enter">
+      <a className="public-wordmark" href="/">
+        심장 달리기
+      </a>
+      <div>
+        <p className="eyebrow">LIVE SPECTATOR</p>
+        <h1>{title}</h1>
+        <p>{description}</p>
+        {retry && (
+          <button
+            className="secondary-button"
+            type="button"
+            onClick={() => window.location.reload()}
+          >
+            다시 시도
+          </button>
+        )}
+      </div>
     </main>
   );
 }
@@ -391,21 +538,64 @@ function TopBar({
   connected,
   code,
   onLeave,
+  watchUrl,
+  mode = "host",
 }: {
   connected: boolean;
   code: string;
-  onLeave: () => void;
+  onLeave?: () => void;
+  watchUrl?: string;
+  mode?: "host" | "spectator";
 }) {
+  const [copied, setCopied] = useState(false);
+
+  useEffect(() => {
+    if (!copied) return;
+    const timer = window.setTimeout(() => setCopied(false), 2_000);
+    return () => window.clearTimeout(timer);
+  }, [copied]);
+
+  const copyWatchUrl = async () => {
+    if (!watchUrl) return;
+    try {
+      await navigator.clipboard.writeText(watchUrl);
+      setCopied(true);
+    } catch {
+      window.prompt("아래 관전 링크를 복사하세요.", watchUrl);
+    }
+  };
+
   return (
     <header className="top-bar">
-      <button className="wordmark" onClick={onLeave} aria-label="처음으로">
-        심장 달리기
-      </button>
-      <div className="top-room-info">
-        <LiveDot live={connected} />
-        <span>{connected ? "연결됨" : "재연결 중"}</span>
-        <span className="top-divider" />
-        <span>방 {code}</span>
+      {onLeave ? (
+        <button className="wordmark" onClick={onLeave} aria-label="처음으로">
+          심장 달리기
+        </button>
+      ) : (
+        <a className="wordmark" href="/">
+          심장 달리기
+        </a>
+      )}
+      <div className="top-bar-actions">
+        {watchUrl && (
+          <button
+            className={`watch-link-button ${copied ? "is-copied" : ""}`}
+            type="button"
+            onClick={copyWatchUrl}
+          >
+            <LinkIcon />
+            <span>{copied ? "복사됨" : "관전 링크 복사"}</span>
+          </button>
+        )}
+        <div className="top-room-info">
+          <LiveDot live={connected} />
+          <span>{connected ? "연결됨" : "재연결 중"}</span>
+          <span className="top-divider" />
+          {mode === "spectator" && (
+            <span className="spectator-label">관전 중</span>
+          )}
+          <span>방 {code}</span>
+        </div>
       </div>
     </header>
   );
@@ -417,12 +607,14 @@ function Lobby({
   error,
   onStart,
   onRemovePlayer,
+  readOnly = false,
 }: {
   room: RoomSnapshot;
   busy: boolean;
   error: string | null;
   onStart: () => void;
   onRemovePlayer: (playerId: string) => void;
+  readOnly?: boolean;
 }) {
   const [openMenuPlayerId, setOpenMenuPlayerId] = useState<string | null>(null);
   const readyCount = room.players.filter(
@@ -506,49 +698,51 @@ function Lobby({
                         : measurementLabel(player.measurementState)}
                 </p>
               </div>
-              <div
-                className="player-actions"
-                onBlur={(event) => {
-                  if (!event.currentTarget.contains(event.relatedTarget)) {
-                    setOpenMenuPlayerId(null);
-                  }
-                }}
-              >
-                <button
-                  className="status-mark"
-                  type="button"
-                  aria-label={`${player.nickname} 참가자 메뉴`}
-                  aria-expanded={openMenuPlayerId === player.id}
-                  onClick={() =>
-                    setOpenMenuPlayerId((current) =>
-                      current === player.id ? null : player.id,
-                    )
-                  }
+              {!readOnly && (
+                <div
+                  className="player-actions"
+                  onBlur={(event) => {
+                    if (!event.currentTarget.contains(event.relatedTarget)) {
+                      setOpenMenuPlayerId(null);
+                    }
+                  }}
                 >
-                  <MoreIcon />
-                </button>
-                {openMenuPlayerId === player.id && (
-                  <div className="player-menu" role="menu">
-                    <button
-                      type="button"
-                      role="menuitem"
-                      disabled={busy}
-                      onClick={() => {
-                        setOpenMenuPlayerId(null);
-                        if (
-                          window.confirm(
-                            `${player.nickname}님을 경기장에서 내보낼까요?`,
-                          )
-                        ) {
-                          onRemovePlayer(player.id);
-                        }
-                      }}
-                    >
-                      경기장에서 내보내기
-                    </button>
-                  </div>
-                )}
-              </div>
+                  <button
+                    className="status-mark"
+                    type="button"
+                    aria-label={`${player.nickname} 참가자 메뉴`}
+                    aria-expanded={openMenuPlayerId === player.id}
+                    onClick={() =>
+                      setOpenMenuPlayerId((current) =>
+                        current === player.id ? null : player.id,
+                      )
+                    }
+                  >
+                    <MoreIcon />
+                  </button>
+                  {openMenuPlayerId === player.id && (
+                    <div className="player-menu" role="menu">
+                      <button
+                        type="button"
+                        role="menuitem"
+                        disabled={busy}
+                        onClick={() => {
+                          setOpenMenuPlayerId(null);
+                          if (
+                            window.confirm(
+                              `${player.nickname}님을 경기장에서 내보낼까요?`,
+                            )
+                          ) {
+                            onRemovePlayer(player.id);
+                          }
+                        }}
+                      >
+                        경기장에서 내보내기
+                      </button>
+                    </div>
+                  )}
+                </div>
+              )}
             </article>
           ))}
           {room.players.length === 0 && (
@@ -569,25 +763,33 @@ function Lobby({
             먼저 {room.finishBeats}번 뛰는 심장이 우승합니다.
           </p>
         </div>
-        <div className="start-area">
-          {error && (
-            <p className="error-message" role="alert">
-              {error}
-            </p>
-          )}
-          <button
-            className="primary-button"
-            onClick={onStart}
-            disabled={!allReady || busy}
-          >
+        {readOnly ? (
+          <p className="spectator-status">
             {allReady
-              ? busy
-                ? "출발 준비 중…"
-                : "경기 시작"
-              : "모두의 측정을 기다리는 중"}
-            {allReady && <ArrowIcon />}
-          </button>
-        </div>
+              ? "모든 심장이 준비됐습니다. 호스트의 출발을 기다립니다."
+              : "참가자들의 측정을 기다리고 있습니다."}
+          </p>
+        ) : (
+          <div className="start-area">
+            {error && (
+              <p className="error-message" role="alert">
+                {error}
+              </p>
+            )}
+            <button
+              className="primary-button"
+              onClick={onStart}
+              disabled={!allReady || busy}
+            >
+              {allReady
+                ? busy
+                  ? "출발 준비 중…"
+                  : "경기 시작"
+                : "모두의 측정을 기다리는 중"}
+              {allReady && <ArrowIcon />}
+            </button>
+          </div>
+        )}
       </div>
     </section>
   );
@@ -597,10 +799,12 @@ function Countdown({
   room,
   busy,
   onEnd,
+  readOnly = false,
 }: {
   room: RoomSnapshot;
   busy: boolean;
   onEnd: () => void;
+  readOnly?: boolean;
 }) {
   const [now, setNow] = useState(Date.now());
   useEffect(() => {
@@ -615,9 +819,11 @@ function Countdown({
 
   return (
     <section className="countdown" aria-live="assertive">
-      <div className="countdown-end-control">
-        <EndRaceButton busy={busy} onEnd={onEnd} />
-      </div>
+      {!readOnly && (
+        <div className="countdown-end-control">
+          <EndRaceButton busy={busy} onEnd={onEnd} />
+        </div>
+      )}
       <p>손가락을 그대로 유지하세요</p>
       <div className="countdown-number" key={display}>
         {display}
@@ -634,11 +840,13 @@ function Race({
   beatEffects,
   busy,
   onEnd,
+  readOnly = false,
 }: {
   room: RoomSnapshot;
   beatEffects: Record<string, AcceptedBeat>;
   busy: boolean;
   onEnd: () => void;
+  readOnly?: boolean;
 }) {
   const leader = useMemo(() => room.players[0], [room.players]);
   return (
@@ -655,7 +863,7 @@ function Race({
             <span>현재 선두</span>
             <strong>{leader?.nickname ?? "—"}</strong>
           </div>
-          <EndRaceButton busy={busy} onEnd={onEnd} />
+          {!readOnly && <EndRaceButton busy={busy} onEnd={onEnd} />}
         </div>
       </div>
 
@@ -736,10 +944,12 @@ function Finish({
   room,
   busy,
   onReset,
+  readOnly = false,
 }: {
   room: RoomSnapshot;
   busy: boolean;
   onReset: () => void;
+  readOnly?: boolean;
 }) {
   const winner =
     room.players.find((player) => player.finishPlace === 1) ?? room.players[0];
@@ -768,10 +978,16 @@ function Finish({
           </li>
         ))}
       </ol>
-      <button className="primary-button" onClick={onReset} disabled={busy}>
-        {busy ? "다시 준비하는 중…" : "새 경기 준비"}
-        <ArrowIcon />
-      </button>
+      {readOnly ? (
+        <p className="spectator-status finish-status">
+          호스트가 다음 경기를 준비하고 있습니다.
+        </p>
+      ) : (
+        <button className="primary-button" onClick={onReset} disabled={busy}>
+          {busy ? "다시 준비하는 중…" : "새 경기 준비"}
+          <ArrowIcon />
+        </button>
+      )}
     </section>
   );
 }
@@ -796,6 +1012,16 @@ function MoreIcon() {
       <circle cx="4" cy="9" r="1.25" />
       <circle cx="9" cy="9" r="1.25" />
       <circle cx="14" cy="9" r="1.25" />
+    </svg>
+  );
+}
+
+function LinkIcon() {
+  return (
+    <svg className="link-icon" viewBox="0 0 20 20" aria-hidden="true">
+      <path d="M8.1 12.1 12 8.2" />
+      <path d="M6.4 14.9 5 16.3a3.4 3.4 0 0 1-4.8-4.8l3.2-3.2a3.4 3.4 0 0 1 4.8 0" />
+      <path d="m13.6 5.1 1.4-1.4a3.4 3.4 0 1 1 4.8 4.8l-3.2 3.2a3.4 3.4 0 0 1-4.8 0" />
     </svg>
   );
 }
