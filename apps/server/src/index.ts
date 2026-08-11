@@ -28,7 +28,7 @@ import type {
 
 interface SocketData {
   roomCode?: string;
-  role?: "host" | "player";
+  role?: "host" | "player" | "viewer";
   playerId?: string;
 }
 
@@ -109,6 +109,15 @@ io.on("connection", (socket) => {
     }
     room.hostSocketId = socket.id;
     attachSocket(socket, room.code, "host");
+    return ack({ ok: true, data: { room: toSnapshot(room) } });
+  });
+
+  socket.on("viewer:join", (request, ack) => {
+    const room = rooms.get(normalizeCode(request.roomCode));
+    if (!room) {
+      return ack({ ok: false, error: "관전할 방을 찾을 수 없습니다." });
+    }
+    attachSocket(socket, room.code, "viewer");
     return ack({ ok: true, data: { room: toSnapshot(room) } });
   });
 
@@ -291,6 +300,7 @@ io.on("connection", (socket) => {
         schedulePlayerCleanup(room.code, player.id);
       }
     }
+    if (socket.data.role === "viewer") return;
     emitSnapshot(room);
   });
 });
@@ -298,7 +308,7 @@ io.on("connection", (socket) => {
 function attachSocket(
   socket: Parameters<Parameters<typeof io.on>[1]>[0],
   roomCode: string,
-  role: "host" | "player",
+  role: "host" | "player" | "viewer",
   playerId?: string,
 ): void {
   socket.join(roomCode);

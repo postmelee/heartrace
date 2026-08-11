@@ -132,6 +132,10 @@ export interface ClientToServerEvents {
     request: { roomCode: string; hostToken: string; playerId: string },
     ack: Ack<{ room: RoomSnapshot }>,
   ) => void;
+  "viewer:join": (
+    request: { roomCode: string },
+    ack: Ack<{ room: RoomSnapshot }>,
+  ) => void;
   "player:join": (
     request: PlayerJoinRequest,
     ack: Ack<PlayerJoinResponse>,

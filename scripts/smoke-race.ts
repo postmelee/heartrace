@@ -25,16 +25,21 @@ async function main(): Promise<void> {
       });
     },
   );
+  const viewer = await joinViewer(created.room.code);
+  assert(
+    viewer.room.code === created.room.code,
+    "관전자는 방 코드만으로 현재 방 상태를 받아야 합니다.",
+  );
 
   const first = await join(created.room.code, "첫 심장");
   const second = await join(created.room.code, "둘째 심장");
   await Promise.all([markReady(first.socket), markReady(second.socket)]);
 
   const acceptedBeats: Array<{ beatCount: number; accent: boolean }> = [];
-  host.on("race:beat", (event) => acceptedBeats.push(event));
+  viewer.socket.on("race:beat", (event) => acceptedBeats.push(event));
 
   const finished = waitForRoom(
-    host,
+    viewer.socket,
     (room) => room.phase === "finished",
     8_000,
   );
@@ -95,6 +100,19 @@ async function main(): Promise<void> {
   console.log(
     `스모크 테스트 통과: ${created.room.code}, 카운트다운(${countdownEndsAt}) 완료 후 ${acceptedBeats.length}박동 처리`,
   );
+}
+
+async function joinViewer(
+  roomCode: string,
+): Promise<{ socket: GameSocket; room: RoomSnapshot }> {
+  const socket = await connect();
+  const room = await new Promise<RoomSnapshot>((resolve, reject) => {
+    socket.emit("viewer:join", { roomCode }, (result) => {
+      if (result.ok) resolve(result.data.room);
+      else reject(new Error(result.error));
+    });
+  });
+  return { socket, room };
 }
 
 async function connect(): Promise<GameSocket> {
