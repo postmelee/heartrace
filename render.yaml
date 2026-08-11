@@ -23,6 +23,8 @@ services:
         value: https://heartrace-api-postmelee.onrender.com
       - key: VITE_PUBLIC_URL
         value: https://heartrace-postmelee.onrender.com
+      - key: VITE_IOS_INSTALL_URL
+        value: https://testflight.apple.com/join/TJXqEQfy
     headers:
       - path: /.well-known/apple-app-site-association
         name: Content-Type

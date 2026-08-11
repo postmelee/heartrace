@@ -11,14 +11,14 @@
 ## 설치 및 테스트
 
 1. iPhone에 TestFlight를 설치합니다.
-2. 배포 담당자가 공유한 심장 달리기 TestFlight 초대 링크를 iPhone에서 엽니다.
+2. iPhone에서 [심장 달리기 TestFlight 초대 링크](https://testflight.apple.com/join/TJXqEQfy)를 엽니다.
 3. TestFlight에서 `심장 달리기`를 설치하고 카메라 권한을 허용합니다.
 4. 노트북에서 [호스트 화면](https://heartrace-postmelee.onrender.com)을 열어 방을 만듭니다.
 5. iPhone 앱에 화면의 4자리 방 코드와 닉네임을 입력합니다.
 6. `측정 시작`을 누르고 후면 카메라와 플래시를 손가락으로 가볍게 덮습니다.
 7. 참가자가 준비 완료로 바뀌면 호스트 화면에서 경기를 시작합니다.
 
-TestFlight 초대 링크는 첫 외부 테스트 빌드가 Apple의 베타 검토를 통과한 뒤 이 문서에 추가됩니다.
+첫 외부 테스트 빌드는 Apple 베타 심사 승인을 받은 뒤 설치할 수 있습니다. 링크가 아직 참여를 허용하지 않는다면 잠시 후 다시 시도하세요.
 
 ## 측정 팁
 
