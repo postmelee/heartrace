@@ -19,5 +19,12 @@
         "EXPO_PUBLIC_SHOW_DIAGNOSTICS": "false"
       }
     }
+  },
+  "submit": {
+    "production": {
+      "ios": {
+        "ascAppId": "6800291252"
+      }
+    }
   }
 }
