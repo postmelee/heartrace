@@ -1119,8 +1119,12 @@ function Race({
   readOnly?: boolean;
 }) {
   const leader = useMemo(() => room.players[0], [room.players]);
+  const isStadiumRace =
+    room.trackMode === "circular" &&
+    room.mode === "relay" &&
+    room.players.every((player) => player.relay !== null);
   return (
-    <section className="race page-enter">
+    <section className={`race page-enter ${isStadiumRace ? "is-stadium" : ""}`}>
       <div className="race-heading">
         <div>
           <p className="eyebrow">
@@ -1142,52 +1146,44 @@ function Race({
         </div>
       </div>
 
-      <div
-        className={`track-list ${room.trackMode === "circular" ? "is-circular" : ""}`}
-      >
-        {room.players.map((player, index) => {
-          const beat = beatEffects[player.id];
-          const effectKey = beat?.beatId ?? "initial";
-          const relay = player.relay;
-          const activeRunner = relay?.runners[relay.activeRunnerIndex];
-          const nextRunner = relay?.runners[relay.activeRunnerIndex + 1];
-          const progressRatio = relay?.legDistanceRatio ?? player.distanceRatio;
-          const displayedBeatCount = relay?.legBeatCount ?? player.beatCount;
-          const runnerKey = relay?.activeRunnerIndex ?? "individual";
-          return (
-            <article
-              className={`track ${relay ? "is-relay" : ""} ${room.trackMode === "circular" && relay ? "is-circular" : ""} ${relay?.status === "handoff" ? "is-handoff" : ""}`}
-              key={player.id}
-            >
-              <div className="track-meta">
-                <span className="lane-number">{index + 1}</span>
-                <div>
-                  <h2>{player.nickname}</h2>
-                  <p>
-                    {relay?.status === "handoff" ? (
-                      <>
-                        <strong>바톤 전달 중</strong>
-                        {nextRunner ? ` · 다음 ${nextRunner.name}` : ""}
-                      </>
-                    ) : (
-                      <>
-                        {activeRunner && `${activeRunner.name} · `}
-                        <strong>{player.bpm ?? "—"}</strong> BPM
-                        {relay && room.trackMode === "circular"
-                          ? ` · ${relay.sectorIndex + 1}구간 · ${relay.lap}바퀴째`
-                          : ""}
-                      </>
-                    )}
-                  </p>
+      {isStadiumRace ? (
+        <StadiumRace room={room} beatEffects={beatEffects} />
+      ) : (
+        <div className="track-list">
+          {room.players.map((player, index) => {
+            const beat = beatEffects[player.id];
+            const effectKey = beat?.beatId ?? "initial";
+            const relay = player.relay;
+            const activeRunner = relay?.runners[relay.activeRunnerIndex];
+            const nextRunner = relay?.runners[relay.activeRunnerIndex + 1];
+            const progressRatio =
+              relay?.legDistanceRatio ?? player.distanceRatio;
+            const displayedBeatCount = relay?.legBeatCount ?? player.beatCount;
+            const runnerKey = relay?.activeRunnerIndex ?? "individual";
+            return (
+              <article
+                className={`track ${relay ? "is-relay" : ""} ${relay?.status === "handoff" ? "is-handoff" : ""}`}
+                key={player.id}
+              >
+                <div className="track-meta">
+                  <span className="lane-number">{index + 1}</span>
+                  <div>
+                    <h2>{player.nickname}</h2>
+                    <p>
+                      {relay?.status === "handoff" ? (
+                        <>
+                          <strong>바톤 전달 중</strong>
+                          {nextRunner ? ` · 다음 ${nextRunner.name}` : ""}
+                        </>
+                      ) : (
+                        <>
+                          {activeRunner && `${activeRunner.name} · `}
+                          <strong>{player.bpm ?? "—"}</strong> BPM
+                        </>
+                      )}
+                    </p>
+                  </div>
                 </div>
-              </div>
-              {room.trackMode === "circular" && relay ? (
-                <CircularTrackVisual
-                  relay={relay}
-                  accent={beat?.accent ?? false}
-                  effectKey={effectKey}
-                />
-              ) : (
                 <div className="track-rail">
                   <div className="track-marks" aria-hidden="true" />
                   <div
@@ -1231,25 +1227,25 @@ function Race({
                   )}
                   <span className="finish-line">결승</span>
                 </div>
-              )}
-              <div className="beat-score">
-                <strong>{displayedBeatCount}</strong>
-                <span>/ {room.finishBeats}</span>
-                {relay && (
-                  <small>
-                    {relay.completedRunners}/{relay.runners.length} 주자
-                    <i>
-                      <b
-                        style={{ width: `${relay.teamDistanceRatio * 100}%` }}
-                      />
-                    </i>
-                  </small>
-                )}
-              </div>
-            </article>
-          );
-        })}
-      </div>
+                <div className="beat-score">
+                  <strong>{displayedBeatCount}</strong>
+                  <span>/ {room.finishBeats}</span>
+                  {relay && (
+                    <small>
+                      {relay.completedRunners}/{relay.runners.length} 주자
+                      <i>
+                        <b
+                          style={{ width: `${relay.teamDistanceRatio * 100}%` }}
+                        />
+                      </i>
+                    </small>
+                  )}
+                </div>
+              </article>
+            );
+          })}
+        </div>
+      )}
       <p className="race-instruction">
         휴대폰 화면의 심박수를 보며, 자신의 심장을 움직여 보세요.
       </p>
@@ -1257,93 +1253,295 @@ function Race({
   );
 }
 
-function CircularTrackVisual({
-  relay,
-  accent,
-  effectKey,
+function StadiumRace({
+  room,
+  beatEffects,
 }: {
-  relay: NonNullable<PlayerSnapshot["relay"]>;
-  accent: boolean;
-  effectKey: string;
+  room: RoomSnapshot;
+  beatEffects: Record<string, AcceptedBeat>;
 }) {
-  const activeRunner = relay.runners[relay.activeRunnerIndex];
-  const nextRunner = relay.runners[relay.activeRunnerIndex + 1];
-  const groupStart = Math.floor(relay.activeRunnerIndex / 4) * 4;
-  const point = (sector: number, ratio: number, radius = 43) => {
-    const angle = ((-90 + sector * 90 + ratio * 90) * Math.PI) / 180;
-    return {
-      left: `${((60 + radius * Math.cos(angle)) / 120) * 100}%`,
-      top: `${((60 + radius * Math.sin(angle)) / 120) * 100}%`,
-    };
-  };
-  const activePoint = point(relay.sectorIndex, relay.legDistanceRatio);
-  const nextPoint = point((relay.activeRunnerIndex + 1) % 4, 0, 35);
+  const teamColorById = new Map(
+    [...room.players]
+      .sort((first, second) => first.id.localeCompare(second.id))
+      .map((player, index) => [
+        player.id,
+        STADIUM_TEAM_COLORS[index % STADIUM_TEAM_COLORS.length],
+      ]),
+  );
+  const entries = room.players.flatMap((player, rankingIndex) => {
+    if (!player.relay) return [];
+    return [
+      {
+        player,
+        relay: player.relay,
+        rankingIndex,
+        teamColor: teamColorById.get(player.id) ?? STADIUM_TEAM_COLORS[0],
+        progress: stadiumRelayProgress(player.relay),
+      },
+    ];
+  });
 
   return (
-    <div className="circular-track" aria-label="네 구간 원형 트랙">
-      <svg viewBox="0 0 120 120" aria-hidden="true">
-        {[0, 1, 2, 3].map((sector) => {
-          const runner = relay.runners[groupStart + sector];
-          return (
-            <circle
-              key={sector}
-              cx="60"
-              cy="60"
-              r="43"
-              pathLength="100"
-              fill="none"
-              stroke={runner?.color ?? "#dededb"}
-              strokeOpacity={runner ? 0.25 : 0.7}
-              strokeWidth="7"
-              strokeDasharray="23 77"
-              strokeLinecap="round"
-              transform={`rotate(${-90 + sector * 90} 60 60)`}
+    <div className="stadium-race">
+      <div
+        className="stadium-canvas"
+        role="img"
+        aria-label="모든 팀이 같은 거리의 중앙 주로를 달리는 네 구간 운동장 트랙"
+      >
+        <svg viewBox="0 0 1000 520" aria-hidden="true">
+          <defs>
+            <pattern
+              id={`finish-check-${room.code}`}
+              width="14"
+              height="14"
+              patternUnits="userSpaceOnUse"
+            >
+              <rect width="14" height="14" fill="#fff" />
+              <rect width="7" height="7" fill="#111" />
+              <rect x="7" y="7" width="7" height="7" fill="#111" />
+            </pattern>
+          </defs>
+          <path className="stadium-outer" d={stadiumPath(235, 765, 215)} />
+          {[195, 175, 155, 135].map((radius) => (
+            <path
+              className="stadium-lane-line"
+              d={stadiumPath(235, 765, radius)}
+              key={radius}
             />
+          ))}
+          <path className="stadium-infield" d={stadiumPath(235, 765, 115)} />
+          <path className="stadium-guide" d={STADIUM_CENTER_PATH} />
+          <rect
+            className="stadium-finish-check"
+            x="875"
+            y="249"
+            width="105"
+            height="22"
+            fill={`url(#finish-check-${room.code})`}
+          />
+          <path className="stadium-finish-post" d="M875 249V172H982" />
+          <rect
+            className="stadium-finish-label-bg"
+            x="872"
+            y="133"
+            width="112"
+            height="42"
+            rx="4"
+          />
+          <text className="stadium-finish-label" x="928" y="162">
+            FINISH
+          </text>
+        </svg>
+
+        {[0, 1, 2, 3].map((sector) => {
+          const marker = stadiumPoint(sector / 4, 0);
+          return (
+            <span
+              className="stadium-sector-marker"
+              key={sector}
+              style={{ left: marker.left, top: marker.top }}
+            >
+              {sector + 1}
+            </span>
           );
         })}
-        <circle
-          cx="60"
-          cy="60"
-          r="43"
-          pathLength="100"
-          fill="none"
-          stroke={activeRunner?.color ?? "#050505"}
-          strokeWidth="7"
-          strokeDasharray={`${relay.legDistanceRatio * 23} 100`}
-          strokeLinecap="round"
-          transform={`rotate(${-90 + relay.sectorIndex * 90} 60 60)`}
-        />
-      </svg>
-      <span className="circular-lap">{relay.lap}L</span>
-      <div
-        className={`racer circular-racer ${accent ? "is-accent" : ""}`}
-        style={
-          {
-            ...activePoint,
-            "--runner-color": activeRunner?.color,
-          } as React.CSSProperties
-        }
-        key={`${relay.activeRunnerIndex}:${effectKey}`}
-      >
-        <span className="racer-pulse" />
-        <HeartSolid />
-      </div>
-      {relay.status === "handoff" && nextRunner && (
-        <div
-          className="racer circular-racer next-racer"
-          style={
-            {
-              ...nextPoint,
-              "--runner-color": nextRunner.color,
-            } as React.CSSProperties
-          }
-          aria-label={`${nextRunner.name} 출발 준비`}
-        >
-          <HeartSolid />
+
+        {entries.map(({ player, relay, rankingIndex, teamColor, progress }) => {
+          const closeEntries = entries.filter(
+            (candidate) =>
+              circularProgressDistance(candidate.progress, progress) < 0.04,
+          );
+          const collisionIndex = closeEntries.findIndex(
+            (candidate) => candidate.player.id === player.id,
+          );
+          const collisionOffset =
+            (collisionIndex - (closeEntries.length - 1) / 2) * 24;
+          const position = stadiumPoint(progress, collisionOffset);
+          const activeRunner = relay.runners[relay.activeRunnerIndex];
+          const beat = beatEffects[player.id];
+          return (
+            <div
+              className={`stadium-racer ${beat?.accent ? "is-accent" : ""} ${relay.status === "handoff" ? "is-handoff" : ""}`}
+              style={
+                {
+                  left: position.left,
+                  top: position.top,
+                  zIndex: 100 - rankingIndex,
+                  "--team-color": teamColor,
+                  "--runner-color": activeRunner?.color,
+                } as React.CSSProperties
+              }
+              key={player.id}
+              aria-label={`${player.nickname} ${activeRunner?.name ?? "주자"}`}
+            >
+              <span className="racer-pulse" key={beat?.beatId ?? "initial"} />
+              <HeartSolid />
+              <strong>{player.nickname.slice(-2)}</strong>
+            </div>
+          );
+        })}
+
+        {entries.map(({ player, relay, progress, rankingIndex, teamColor }) => {
+          const nextRunner = relay.runners[relay.activeRunnerIndex + 1];
+          if (relay.status !== "handoff" || !nextRunner) return null;
+          const closeEntries = entries.filter(
+            (candidate) =>
+              circularProgressDistance(candidate.progress, progress) < 0.04,
+          );
+          const collisionIndex = closeEntries.findIndex(
+            (candidate) => candidate.player.id === player.id,
+          );
+          const collisionOffset =
+            (collisionIndex - (closeEntries.length - 1) / 2) * 24 - 22;
+          const position = stadiumPoint(progress, collisionOffset);
+          return (
+            <div
+              className="stadium-racer stadium-next-racer"
+              style={
+                {
+                  left: position.left,
+                  top: position.top,
+                  zIndex: 110 - rankingIndex,
+                  "--team-color": teamColor,
+                  "--runner-color": nextRunner.color,
+                } as React.CSSProperties
+              }
+              key={`${player.id}:next`}
+              aria-label={`${player.nickname} ${nextRunner.name} 출발 준비`}
+            >
+              <HeartSolid />
+            </div>
+          );
+        })}
+
+        <div className="stadium-infield-copy" aria-hidden="true">
+          <span>SHARED TRACK</span>
+          <strong>모든 팀이 같은 거리를 달립니다</strong>
         </div>
-      )}
+      </div>
+
+      <div className="stadium-scoreboard">
+        {entries.map(({ player, relay, teamColor }, index) => {
+          const activeRunner = relay.runners[relay.activeRunnerIndex];
+          const nextRunner = relay.runners[relay.activeRunnerIndex + 1];
+          return (
+            <article
+              className="stadium-team-card"
+              style={
+                {
+                  "--team-color": teamColor,
+                } as React.CSSProperties
+              }
+              key={player.id}
+            >
+              <div>
+                <span className="stadium-team-rank">{index + 1}</span>
+                <h2>{player.nickname}</h2>
+              </div>
+              <p>
+                {relay.status === "handoff" ? (
+                  <>바톤 전달 중 · 다음 {nextRunner?.name ?? "주자"}</>
+                ) : (
+                  <>
+                    {activeRunner?.name} · <strong>{player.bpm ?? "—"}</strong>{" "}
+                    BPM
+                  </>
+                )}
+              </p>
+              <footer>
+                <span>
+                  {relay.legBeatCount}/{room.finishBeats} 박동
+                </span>
+                <span>
+                  {relay.completedRunners}/{relay.runners.length} 주자
+                </span>
+                <i>
+                  <b style={{ width: `${relay.teamDistanceRatio * 100}%` }} />
+                </i>
+              </footer>
+            </article>
+          );
+        })}
+      </div>
     </div>
   );
+}
+
+const STADIUM_CENTER_PATH = stadiumPath(235, 765, 165);
+const STADIUM_TEAM_COLORS = ["#d93e68", "#216fd1", "#ef7f24", "#219b69"];
+
+function stadiumPath(leftCenter: number, rightCenter: number, radius: number) {
+  const top = 260 - radius;
+  const bottom = 260 + radius;
+  return `M ${leftCenter} ${top} H ${rightCenter} A ${radius} ${radius} 0 0 1 ${rightCenter} ${bottom} H ${leftCenter} A ${radius} ${radius} 0 0 1 ${leftCenter} ${top} Z`;
+}
+
+function stadiumRelayProgress(
+  relay: NonNullable<PlayerSnapshot["relay"]>,
+): number {
+  return (relay.sectorIndex + relay.legDistanceRatio) / 4;
+}
+
+function stadiumPoint(progress: number, offset: number) {
+  const leftCenter = 235;
+  const rightCenter = 765;
+  const centerY = 260;
+  const radius = 165;
+  const straightLength = rightCenter - leftCenter;
+  const quarterArc = (Math.PI * radius) / 2;
+  const halfArc = Math.PI * radius;
+  const totalLength = straightLength * 2 + halfArc * 2;
+  const normalized = ((progress % 1) + 1) % 1;
+
+  const basePoint = (value: number) => {
+    let distance = (((value % 1) + 1) % 1) * totalLength;
+    if (distance <= quarterArc) {
+      const angle = distance / radius;
+      return {
+        x: rightCenter + radius * Math.cos(angle),
+        y: centerY + radius * Math.sin(angle),
+      };
+    }
+    distance -= quarterArc;
+    if (distance <= straightLength) {
+      return { x: rightCenter - distance, y: centerY + radius };
+    }
+    distance -= straightLength;
+    if (distance <= halfArc) {
+      const angle = Math.PI / 2 + distance / radius;
+      return {
+        x: leftCenter + radius * Math.cos(angle),
+        y: centerY + radius * Math.sin(angle),
+      };
+    }
+    distance -= halfArc;
+    if (distance <= straightLength) {
+      return { x: leftCenter + distance, y: centerY - radius };
+    }
+    distance -= straightLength;
+    const angle = (Math.PI * 3) / 2 + distance / radius;
+    return {
+      x: rightCenter + radius * Math.cos(angle),
+      y: centerY + radius * Math.sin(angle),
+    };
+  };
+
+  const point = basePoint(normalized);
+  const ahead = basePoint(normalized + 0.0005);
+  const tangentX = ahead.x - point.x;
+  const tangentY = ahead.y - point.y;
+  const tangentLength = Math.hypot(tangentX, tangentY) || 1;
+  const x = point.x + (-tangentY / tangentLength) * offset;
+  const y = point.y + (tangentX / tangentLength) * offset;
+  return {
+    left: `${(x / 1000) * 100}%`,
+    top: `${(y / 520) * 100}%`,
+  };
+}
+
+function circularProgressDistance(first: number, second: number): number {
+  const distance = Math.abs(first - second);
+  return Math.min(distance, 1 - distance);
 }
 
 function EndRaceButton({ busy, onEnd }: { busy: boolean; onEnd: () => void }) {
