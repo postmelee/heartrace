@@ -81,6 +81,8 @@ export interface RoomSnapshot {
   phase: RoomPhase;
   mode: RaceMode;
   trackMode: TrackMode;
+  /** 휴대폰 대신 서버가 박동을 생성하는 전시 리허설 방인지 여부 */
+  demo: boolean;
   relaySettings: RelayRoomSettings | null;
   /** 이 스냅샷을 만든 서버의 Unix epoch(ms). 클라이언트 시계 오차 보정용 */
   serverNow: number;
@@ -143,6 +145,7 @@ export interface HostCreateRoomRequest {
   finishBeats?: number;
   mode?: RaceMode;
   trackMode?: TrackMode;
+  demo?: boolean;
   relay?: {
     teamCount: number;
     runnersPerTeam: number;

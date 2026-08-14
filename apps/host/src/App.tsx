@@ -14,6 +14,7 @@ const SOCKET_URL = import.meta.env.VITE_SOCKET_URL ?? "http://localhost:3001";
 const PUBLIC_URL = import.meta.env.VITE_PUBLIC_URL ?? window.location.origin;
 const IOS_INSTALL_URL = import.meta.env.VITE_IOS_INSTALL_URL ?? "";
 const STORAGE_KEY = "heartrace:host-session";
+const DEMO_STORAGE_KEY = "heartrace:demo-host-session";
 
 type GameSocket = Socket<ServerToClientEvents, ClientToServerEvents>;
 
@@ -28,15 +29,17 @@ export default function App() {
   if (path === "/watch") return <SpectatorApp />;
   if (path === "/privacy") return <PrivacyPage />;
   if (path === "/support") return <SupportPage />;
+  if (path === "/demo") return <HostApp demo />;
   return <HostApp />;
 }
 
-function HostApp() {
+function HostApp({ demo = false }: { demo?: boolean }) {
+  const storageKey = demo ? DEMO_STORAGE_KEY : STORAGE_KEY;
   const socketRef = useRef<GameSocket | null>(null);
   const [connected, setConnected] = useState(false);
   const [room, setRoom] = useState<RoomSnapshot | null>(null);
   const [session, setSession] = useState<HostSession | null>(() =>
-    loadSession(),
+    loadSession(storageKey),
   );
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
@@ -54,7 +57,7 @@ function HostApp() {
 
     const resume = () => {
       setConnected(true);
-      const stored = loadSession();
+      const stored = loadSession(storageKey);
       if (!stored) return;
       socket.emit("host:resume", stored, (result) => {
         if (result.ok) {
@@ -62,7 +65,7 @@ function HostApp() {
           setRoom(result.data.room);
           setError(null);
         } else {
-          clearSession();
+          clearSession(storageKey);
           setSession(null);
           setRoom(null);
         }
@@ -81,28 +84,31 @@ function HostApp() {
       socket.disconnect();
       socketRef.current = null;
     };
-  }, []);
+  }, [storageKey]);
 
-  const createRoom = useCallback((request: HostCreateRoomRequest) => {
-    const socket = socketRef.current;
-    if (!socket?.connected) {
-      setError("서버와 연결 중입니다. 잠시 후 다시 눌러 주세요.");
-      return;
-    }
-    setBusy(true);
-    setError(null);
-    socket.emit("host:create-room", request, (result) => {
-      setBusy(false);
-      if (!result.ok) return setError(result.error);
-      const nextSession = {
-        roomCode: result.data.room.code,
-        hostToken: result.data.hostToken,
-      };
-      localStorage.setItem(STORAGE_KEY, JSON.stringify(nextSession));
-      setSession(nextSession);
-      setRoom(result.data.room);
-    });
-  }, []);
+  const createRoom = useCallback(
+    (request: HostCreateRoomRequest) => {
+      const socket = socketRef.current;
+      if (!socket?.connected) {
+        setError("서버와 연결 중입니다. 잠시 후 다시 눌러 주세요.");
+        return;
+      }
+      setBusy(true);
+      setError(null);
+      socket.emit("host:create-room", request, (result) => {
+        setBusy(false);
+        if (!result.ok) return setError(result.error);
+        const nextSession = {
+          roomCode: result.data.room.code,
+          hostToken: result.data.hostToken,
+        };
+        localStorage.setItem(storageKey, JSON.stringify(nextSession));
+        setSession(nextSession);
+        setRoom(result.data.room);
+      });
+    },
+    [storageKey],
+  );
 
   const startRace = useCallback(() => {
     if (!session || !socketRef.current) return;
@@ -145,12 +151,12 @@ function HostApp() {
   );
 
   const leaveRoom = useCallback(() => {
-    clearSession();
+    clearSession(storageKey);
     setSession(null);
     setRoom(null);
     setBeatEffects({});
     setError(null);
-  }, []);
+  }, [storageKey]);
 
   if (!room || !session) {
     return (
@@ -159,6 +165,7 @@ function HostApp() {
         busy={busy}
         error={error}
         onCreate={createRoom}
+        demo={demo}
       />
     );
   }
@@ -173,6 +180,7 @@ function HostApp() {
         code={room.code}
         onLeave={leaveRoom}
         watchUrl={watchUrl.toString()}
+        demo={room.demo}
       />
       {room.phase === "lobby" && (
         <Lobby
@@ -277,7 +285,12 @@ function SpectatorApp() {
 
   return (
     <main className="app-shell spectator-shell">
-      <TopBar connected={connected} code={room.code} mode="spectator" />
+      <TopBar
+        connected={connected}
+        code={room.code}
+        mode="spectator"
+        demo={room.demo}
+      />
       {room.phase === "lobby" && (
         <Lobby
           room={room}
@@ -492,13 +505,17 @@ function Home({
   busy,
   error,
   onCreate,
+  demo = false,
 }: {
   connected: boolean;
   busy: boolean;
   error: string | null;
   onCreate: (request: HostCreateRoomRequest) => void;
+  demo?: boolean;
 }) {
-  const [mode, setMode] = useState<"individual" | "relay">("individual");
+  const [mode, setMode] = useState<"individual" | "relay">(
+    demo ? "relay" : "individual",
+  );
   const [teamCount, setTeamCount] = useState(2);
   const [runnersPerTeam, setRunnersPerTeam] = useState(3);
   const [legBeats, setLegBeats] = useState<10 | 20 | 30 | 60>(20);
@@ -511,46 +528,68 @@ function Home({
           finishBeats: legBeats,
           mode,
           trackMode,
+          demo,
           relay: { teamCount, runnersPerTeam, legBeats },
         }
       : { finishBeats: 60, mode };
 
   return (
-    <main className="home page-enter">
+    <main className={`home page-enter ${demo ? "is-demo" : ""}`}>
       <div className="home-kicker">
         <LiveDot live={connected} />
-        참여형 운동회
+        {demo ? "휴대폰 없는 리허설" : "참여형 운동회"}
       </div>
       <div className="home-copy">
-        <p className="eyebrow">HEART RACE</p>
+        <p className="eyebrow">{demo ? "HEART RACE · MOCK" : "HEART RACE"}</p>
         <h1>
-          아무도 달리지 않지만,
-          <br />
-          모두의 심장은 달립니다.
+          {demo ? (
+            <>
+              가상의 심장으로,
+              <br />팀 경기를 리허설합니다.
+            </>
+          ) : (
+            <>
+              아무도 달리지 않지만,
+              <br />
+              모두의 심장은 달립니다.
+            </>
+          )}
         </h1>
         <p className="home-description">
-          휴대폰 카메라에 손가락을 올리고 심박수를 조절하세요.
-          <br className="desktop-only" /> 박동 한 번이 곧 한 걸음입니다.
+          {demo ? (
+            <>
+              팀과 주자 수를 정하면 서버가 가상 박동을 생성합니다.
+              <br className="desktop-only" /> 실제 트랙과 바톤 전환을 그대로
+              확인할 수 있습니다.
+            </>
+          ) : (
+            <>
+              휴대폰 카메라에 손가락을 올리고 심박수를 조절하세요.
+              <br className="desktop-only" /> 박동 한 번이 곧 한 걸음입니다.
+            </>
+          )}
         </p>
       </div>
       <div className="home-action">
         <div className="race-setup" aria-label="경기 방식 설정">
-          <div className="mode-picker" role="group" aria-label="경기 방식">
-            <button
-              type="button"
-              className={mode === "individual" ? "is-selected" : ""}
-              onClick={() => setMode("individual")}
-            >
-              개인전
-            </button>
-            <button
-              type="button"
-              className={mode === "relay" ? "is-selected" : ""}
-              onClick={() => setMode("relay")}
-            >
-              팀 이어달리기
-            </button>
-          </div>
+          {!demo && (
+            <div className="mode-picker" role="group" aria-label="경기 방식">
+              <button
+                type="button"
+                className={mode === "individual" ? "is-selected" : ""}
+                onClick={() => setMode("individual")}
+              >
+                개인전
+              </button>
+              <button
+                type="button"
+                className={mode === "relay" ? "is-selected" : ""}
+                onClick={() => setMode("relay")}
+              >
+                팀 이어달리기
+              </button>
+            </div>
+          )}
           {mode === "relay" && (
             <div className="relay-options">
               <NumberPicker
@@ -614,16 +653,29 @@ function Home({
           onClick={() => onCreate(createRequest)}
           disabled={busy}
         >
-          {busy ? "경기장 만드는 중…" : "새 경기 만들기"}
+          {busy
+            ? "경기장 만드는 중…"
+            : demo
+              ? "모의 경기 만들기"
+              : "새 경기 만들기"}
           <ArrowIcon />
         </button>
+        {!demo && (
+          <a className="demo-entry" href="/demo">
+            휴대폰 없이 테스트하기
+          </a>
+        )}
         {error && (
           <p className="error-message" role="alert">
             {error}
           </p>
         )}
       </div>
-      <p className="edition">전시용 프로토타입 · 2026</p>
+      <p className="edition">
+        {demo
+          ? "가상 박동은 의료 측정값이 아닙니다."
+          : "전시용 프로토타입 · 2026"}
+      </p>
     </main>
   );
 }
@@ -710,12 +762,14 @@ function TopBar({
   onLeave,
   watchUrl,
   mode = "host",
+  demo = false,
 }: {
   connected: boolean;
   code: string;
   onLeave?: () => void;
   watchUrl?: string;
   mode?: "host" | "spectator";
+  demo?: boolean;
 }) {
   const [copied, setCopied] = useState(false);
 
@@ -764,6 +818,7 @@ function TopBar({
           {mode === "spectator" && (
             <span className="spectator-label">관전 중</span>
           )}
+          {demo && <span className="demo-label">MOCK</span>}
           <span>방 {code}</span>
         </div>
       </div>
@@ -806,9 +861,11 @@ function Lobby({
       <div className="join-panel">
         <div>
           <p className="eyebrow">
-            {isRelay
-              ? "각 팀의 대표 휴대폰에서 방 코드를 입력하세요"
-              : "휴대폰에서 방 코드를 입력하세요"}
+            {room.demo
+              ? "가상 팀의 준비가 완료되었습니다"
+              : isRelay
+                ? "각 팀의 대표 휴대폰에서 방 코드를 입력하세요"
+                : "휴대폰에서 방 코드를 입력하세요"}
           </p>
           <p
             className="room-code"
@@ -817,19 +874,26 @@ function Lobby({
             {room.code}
           </p>
           <p className="join-help">
-            심장 달리기 앱을 열고 {isRelay ? "팀 이름" : "닉네임"}과 코드를
-            입력하세요.
+            {room.demo
+              ? "경기 시작을 누르면 서버가 팀마다 서로 다른 가상 심박을 발생시킵니다."
+              : `심장 달리기 앱을 열고 ${isRelay ? "팀 이름" : "닉네임"}과 코드를 입력하세요.`}
           </p>
         </div>
-        <div className="qr-frame" aria-label="앱 입장 QR 코드">
-          <QRCodeSVG
-            value={joinUri}
-            size={150}
-            level="M"
-            bgColor="#ffffff"
-            fgColor="#050505"
-          />
-        </div>
+        {room.demo ? (
+          <div className="demo-room-mark" aria-label="모의 경기">
+            MOCK
+          </div>
+        ) : (
+          <div className="qr-frame" aria-label="앱 입장 QR 코드">
+            <QRCodeSVG
+              value={joinUri}
+              size={150}
+              level="M"
+              bgColor="#ffffff"
+              fgColor="#050505"
+            />
+          </div>
+        )}
       </div>
 
       <div className="players-section">
@@ -892,7 +956,7 @@ function Lobby({
                   </div>
                 )}
               </div>
-              {!readOnly && (
+              {!readOnly && !room.demo && (
                 <div
                   className="player-actions"
                   onBlur={(event) => {
@@ -1060,9 +1124,14 @@ function Race({
       <div className="race-heading">
         <div>
           <p className="eyebrow">
-            <span className="recording-dot" /> 경기 중
+            <span className="recording-dot" />{" "}
+            {room.demo ? "모의 경기 중" : "경기 중"}
           </p>
-          <h1>심장이 달리고 있습니다</h1>
+          <h1>
+            {room.demo
+              ? "가상 심장이 달리고 있습니다"
+              : "심장이 달리고 있습니다"}
+          </h1>
         </div>
         <div className="race-actions">
           <div className="leader-copy">
@@ -1422,15 +1491,15 @@ function measurementLabel(
   return "측정 시작 전";
 }
 
-function loadSession(): HostSession | null {
+function loadSession(storageKey: string): HostSession | null {
   try {
-    const value = localStorage.getItem(STORAGE_KEY);
+    const value = localStorage.getItem(storageKey);
     return value ? (JSON.parse(value) as HostSession) : null;
   } catch {
     return null;
   }
 }
 
-function clearSession() {
-  localStorage.removeItem(STORAGE_KEY);
+function clearSession(storageKey: string) {
+  localStorage.removeItem(storageKey);
 }
