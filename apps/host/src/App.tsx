@@ -5,6 +5,7 @@ import type {
   AcceptedBeat,
   ClientToServerEvents,
   HostCreateRoomRequest,
+  PlayerSnapshot,
   RoomSnapshot,
   ServerToClientEvents,
 } from "@heartrace/protocol";
@@ -500,12 +501,17 @@ function Home({
   const [mode, setMode] = useState<"individual" | "relay">("individual");
   const [teamCount, setTeamCount] = useState(2);
   const [runnersPerTeam, setRunnersPerTeam] = useState(3);
+  const [legBeats, setLegBeats] = useState<10 | 20 | 30 | 60>(20);
+  const [trackMode, setTrackMode] = useState<"straight" | "circular">(
+    "straight",
+  );
   const createRequest: HostCreateRoomRequest =
     mode === "relay"
       ? {
-          finishBeats: 60,
+          finishBeats: legBeats,
           mode,
-          relay: { teamCount, runnersPerTeam },
+          trackMode,
+          relay: { teamCount, runnersPerTeam, legBeats },
         }
       : { finishBeats: 60, mode };
 
@@ -555,14 +561,51 @@ function Home({
                 suffix="팀"
                 onChange={setTeamCount}
               />
-              <NumberPicker
+              <SelectPicker
                 label="팀별 주자"
                 value={runnersPerTeam}
                 min={2}
-                max={6}
+                max={30}
                 suffix="명"
                 onChange={setRunnersPerTeam}
               />
+              <div className="choice-picker">
+                <span>트랙</span>
+                <div role="group" aria-label="트랙 모양">
+                  <button
+                    type="button"
+                    className={trackMode === "straight" ? "is-selected" : ""}
+                    aria-pressed={trackMode === "straight"}
+                    onClick={() => setTrackMode("straight")}
+                  >
+                    직선
+                  </button>
+                  <button
+                    type="button"
+                    className={trackMode === "circular" ? "is-selected" : ""}
+                    aria-pressed={trackMode === "circular"}
+                    onClick={() => setTrackMode("circular")}
+                  >
+                    원형
+                  </button>
+                </div>
+              </div>
+              <div className="choice-picker beat-choice-picker">
+                <span>주자당 박동</span>
+                <div role="group" aria-label="주자당 완주 박동 수">
+                  {([10, 20, 30, 60] as const).map((option) => (
+                    <button
+                      type="button"
+                      key={option}
+                      className={legBeats === option ? "is-selected" : ""}
+                      aria-pressed={legBeats === option}
+                      onClick={() => setLegBeats(option)}
+                    >
+                      {option}
+                    </button>
+                  ))}
+                </div>
+              </div>
             </div>
           )}
         </div>
@@ -626,6 +669,38 @@ function NumberPicker({
         </button>
       </div>
     </div>
+  );
+}
+
+function SelectPicker({
+  label,
+  value,
+  min,
+  max,
+  suffix,
+  onChange,
+}: {
+  label: string;
+  value: number;
+  min: number;
+  max: number;
+  suffix: string;
+  onChange: (value: number) => void;
+}) {
+  return (
+    <label className="select-picker">
+      <span>{label}</span>
+      <select value={value} onChange={(event) => onChange(+event.target.value)}>
+        {Array.from({ length: max - min + 1 }, (_, index) => min + index).map(
+          (option) => (
+            <option key={option} value={option}>
+              {option}
+              {suffix}
+            </option>
+          ),
+        )}
+      </select>
+    </label>
   );
 }
 
@@ -803,12 +878,17 @@ function Lobby({
                 </p>
                 {player.relay && (
                   <div className="runner-lineup" aria-label="주자 순서">
-                    {player.relay.runners.map((runner) => (
+                    {player.relay.runners.slice(0, 6).map((runner) => (
                       <span key={runner.index}>
                         <i style={{ background: runner.color }} />
                         {runner.name}
                       </span>
                     ))}
+                    {player.relay.runners.length > 6 && (
+                      <span className="runner-lineup-more">
+                        +{player.relay.runners.length - 6}명
+                      </span>
+                    )}
                   </div>
                 )}
               </div>
@@ -874,12 +954,14 @@ function Lobby({
           <p>
             <strong>
               {isRelay
-                ? `한 팀 ${room.relaySettings?.runnersPerTeam}명 · 바톤 전환 5초`
+                ? `한 팀 ${room.relaySettings?.runnersPerTeam}명 · 주자당 ${room.relaySettings?.legBeats}박동 · 바톤 전환 5초`
                 : "한 번의 박동 = 한 걸음"}
             </strong>
             <br />
             {isRelay
-              ? `주자마다 ${room.finishBeats / (room.relaySettings?.runnersPerTeam ?? 1)}박동씩 이어 달립니다.`
+              ? room.trackMode === "circular"
+                ? "주자마다 원형 트랙의 한 구간을 달리고, 네 주자마다 다음 바퀴로 이어집니다."
+                : "주자마다 직선 트랙 전체를 달린 뒤 다음 주자가 출발합니다."
               : `먼저 ${room.finishBeats}번 뛰는 심장이 우승합니다.`}
           </p>
         </div>
@@ -991,16 +1073,21 @@ function Race({
         </div>
       </div>
 
-      <div className="track-list">
+      <div
+        className={`track-list ${room.trackMode === "circular" ? "is-circular" : ""}`}
+      >
         {room.players.map((player, index) => {
           const beat = beatEffects[player.id];
           const effectKey = beat?.beatId ?? "initial";
           const relay = player.relay;
           const activeRunner = relay?.runners[relay.activeRunnerIndex];
           const nextRunner = relay?.runners[relay.activeRunnerIndex + 1];
+          const progressRatio = relay?.legDistanceRatio ?? player.distanceRatio;
+          const displayedBeatCount = relay?.legBeatCount ?? player.beatCount;
+          const runnerKey = relay?.activeRunnerIndex ?? "individual";
           return (
             <article
-              className={`track ${relay ? "is-relay" : ""} ${relay?.status === "handoff" ? "is-handoff" : ""}`}
+              className={`track ${relay ? "is-relay" : ""} ${room.trackMode === "circular" && relay ? "is-circular" : ""} ${relay?.status === "handoff" ? "is-handoff" : ""}`}
               key={player.id}
             >
               <div className="track-meta">
@@ -1017,52 +1104,78 @@ function Race({
                       <>
                         {activeRunner && `${activeRunner.name} · `}
                         <strong>{player.bpm ?? "—"}</strong> BPM
+                        {relay && room.trackMode === "circular"
+                          ? ` · ${relay.sectorIndex + 1}구간 · ${relay.lap}바퀴째`
+                          : ""}
                       </>
                     )}
                   </p>
                 </div>
               </div>
-              <div className="track-rail">
-                {relay && (
-                  <div className="relay-track-segments" aria-hidden="true">
-                    {relay.runners.map((runner) => (
-                      <span
-                        key={runner.index}
-                        style={{
-                          backgroundColor: `${runner.color}24`,
-                          borderColor: `${runner.color}66`,
-                        }}
-                      >
-                        <i style={{ backgroundColor: runner.color }} />
-                      </span>
-                    ))}
-                  </div>
-                )}
-                <div className="track-marks" aria-hidden="true" />
-                <div
-                  className="track-progress"
-                  style={{ width: `${player.distanceRatio * 100}%` }}
+              {room.trackMode === "circular" && relay ? (
+                <CircularTrackVisual
+                  relay={relay}
+                  accent={beat?.accent ?? false}
+                  effectKey={effectKey}
                 />
-                <div
-                  className={`racer ${beat?.accent ? "is-accent" : ""}`}
-                  style={{
-                    left: `${player.distanceRatio * 100}%`,
-                    ...(activeRunner
-                      ? ({
-                          "--runner-color": activeRunner.color,
-                        } as React.CSSProperties)
-                      : {}),
-                  }}
-                  key={effectKey}
-                >
-                  <span className="racer-pulse" />
-                  <HeartSolid />
+              ) : (
+                <div className="track-rail">
+                  <div className="track-marks" aria-hidden="true" />
+                  <div
+                    className="track-progress"
+                    key={`${runnerKey}:progress`}
+                    style={{
+                      width: `${progressRatio * 100}%`,
+                      ...(activeRunner
+                        ? { backgroundColor: activeRunner.color }
+                        : {}),
+                    }}
+                  />
+                  <div
+                    className={`racer ${beat?.accent ? "is-accent" : ""}`}
+                    style={{
+                      left: `${progressRatio * 100}%`,
+                      ...(activeRunner
+                        ? ({
+                            "--runner-color": activeRunner.color,
+                          } as React.CSSProperties)
+                        : {}),
+                    }}
+                    key={`${runnerKey}:${effectKey}`}
+                  >
+                    <span className="racer-pulse" />
+                    <HeartSolid />
+                  </div>
+                  {relay?.status === "handoff" && nextRunner && (
+                    <div
+                      className="racer next-racer"
+                      style={
+                        {
+                          left: 0,
+                          "--runner-color": nextRunner.color,
+                        } as React.CSSProperties
+                      }
+                      aria-label={`${nextRunner.name} 출발 준비`}
+                    >
+                      <HeartSolid />
+                    </div>
+                  )}
+                  <span className="finish-line">결승</span>
                 </div>
-                <span className="finish-line">결승</span>
-              </div>
+              )}
               <div className="beat-score">
-                <strong>{player.beatCount}</strong>
+                <strong>{displayedBeatCount}</strong>
                 <span>/ {room.finishBeats}</span>
+                {relay && (
+                  <small>
+                    {relay.completedRunners}/{relay.runners.length} 주자
+                    <i>
+                      <b
+                        style={{ width: `${relay.teamDistanceRatio * 100}%` }}
+                      />
+                    </i>
+                  </small>
+                )}
               </div>
             </article>
           );
@@ -1072,6 +1185,95 @@ function Race({
         휴대폰 화면의 심박수를 보며, 자신의 심장을 움직여 보세요.
       </p>
     </section>
+  );
+}
+
+function CircularTrackVisual({
+  relay,
+  accent,
+  effectKey,
+}: {
+  relay: NonNullable<PlayerSnapshot["relay"]>;
+  accent: boolean;
+  effectKey: string;
+}) {
+  const activeRunner = relay.runners[relay.activeRunnerIndex];
+  const nextRunner = relay.runners[relay.activeRunnerIndex + 1];
+  const groupStart = Math.floor(relay.activeRunnerIndex / 4) * 4;
+  const point = (sector: number, ratio: number, radius = 43) => {
+    const angle = ((-90 + sector * 90 + ratio * 90) * Math.PI) / 180;
+    return {
+      left: `${((60 + radius * Math.cos(angle)) / 120) * 100}%`,
+      top: `${((60 + radius * Math.sin(angle)) / 120) * 100}%`,
+    };
+  };
+  const activePoint = point(relay.sectorIndex, relay.legDistanceRatio);
+  const nextPoint = point((relay.activeRunnerIndex + 1) % 4, 0, 35);
+
+  return (
+    <div className="circular-track" aria-label="네 구간 원형 트랙">
+      <svg viewBox="0 0 120 120" aria-hidden="true">
+        {[0, 1, 2, 3].map((sector) => {
+          const runner = relay.runners[groupStart + sector];
+          return (
+            <circle
+              key={sector}
+              cx="60"
+              cy="60"
+              r="43"
+              pathLength="100"
+              fill="none"
+              stroke={runner?.color ?? "#dededb"}
+              strokeOpacity={runner ? 0.25 : 0.7}
+              strokeWidth="7"
+              strokeDasharray="23 77"
+              strokeLinecap="round"
+              transform={`rotate(${-90 + sector * 90} 60 60)`}
+            />
+          );
+        })}
+        <circle
+          cx="60"
+          cy="60"
+          r="43"
+          pathLength="100"
+          fill="none"
+          stroke={activeRunner?.color ?? "#050505"}
+          strokeWidth="7"
+          strokeDasharray={`${relay.legDistanceRatio * 23} 100`}
+          strokeLinecap="round"
+          transform={`rotate(${-90 + relay.sectorIndex * 90} 60 60)`}
+        />
+      </svg>
+      <span className="circular-lap">{relay.lap}L</span>
+      <div
+        className={`racer circular-racer ${accent ? "is-accent" : ""}`}
+        style={
+          {
+            ...activePoint,
+            "--runner-color": activeRunner?.color,
+          } as React.CSSProperties
+        }
+        key={`${relay.activeRunnerIndex}:${effectKey}`}
+      >
+        <span className="racer-pulse" />
+        <HeartSolid />
+      </div>
+      {relay.status === "handoff" && nextRunner && (
+        <div
+          className="racer circular-racer next-racer"
+          style={
+            {
+              ...nextPoint,
+              "--runner-color": nextRunner.color,
+            } as React.CSSProperties
+          }
+          aria-label={`${nextRunner.name} 출발 준비`}
+        >
+          <HeartSolid />
+        </div>
+      )}
+    </div>
   );
 }
 

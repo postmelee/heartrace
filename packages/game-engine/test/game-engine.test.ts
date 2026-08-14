@@ -30,14 +30,18 @@ function setupRace(finishBeats = 10) {
   return { room, player };
 }
 
-function setupRelayRace(finishBeats = 10) {
+function setupRelayRace(
+  legBeats = 10,
+  runnersPerTeam = 2,
+  trackMode: "straight" | "circular" = "straight",
+) {
   const room = createRoomState({
     code: "TEAM",
     hostToken: "host-token",
     hostSocketId: "host-socket",
-    finishBeats,
     mode: "relay",
-    relay: { teamCount: 2, runnersPerTeam: 2 },
+    trackMode,
+    relay: { teamCount: 2, runnersPerTeam, legBeats },
   });
   const firstTeam = addPlayer(room, {
     id: "team-1",
@@ -89,7 +93,7 @@ describe("심박 경주 규칙", () => {
         hostToken: "host-token",
         hostSocketId: "host-socket",
         mode: "relay",
-        relay: { teamCount: 1, runnersPerTeam: 3 },
+        relay: { teamCount: 1, runnersPerTeam: 3, legBeats: 20 },
       }),
     ).toThrow("팀 수는 2~4팀이어야 합니다.");
     expect(() =>
@@ -98,25 +102,37 @@ describe("심박 경주 규칙", () => {
         hostToken: "host-token",
         hostSocketId: "host-socket",
         mode: "relay",
-        relay: { teamCount: 2, runnersPerTeam: 7 },
+        relay: { teamCount: 2, runnersPerTeam: 31, legBeats: 20 },
       }),
-    ).toThrow("팀별 주자는 2~6명이어야 합니다.");
+    ).toThrow("팀별 주자는 2~30명이어야 합니다.");
+    expect(() =>
+      createRoomState({
+        code: "BAD3",
+        hostToken: "host-token",
+        hostSocketId: "host-socket",
+        mode: "relay",
+        relay: { teamCount: 2, runnersPerTeam: 3, legBeats: 15 },
+      }),
+    ).toThrow("주자당 박동은 10·20·30·60 중에서 선택해 주세요.");
   });
 
-  it("팀전 방에 팀 수와 주자 수, 동일한 구간 경계를 만든다", () => {
-    const { room, firstTeam } = setupRelayRace(60);
+  it("팀전 방에 트랙과 주자당 박동 수를 저장한다", () => {
+    const { room, firstTeam } = setupRelayRace(20, 30, "circular");
 
     expect(room.mode).toBe("relay");
+    expect(room.trackMode).toBe("circular");
+    expect(room.finishBeats).toBe(20);
     expect(room.relaySettings).toEqual({
       teamCount: 2,
-      runnersPerTeam: 2,
+      runnersPerTeam: 30,
+      legBeats: 20,
       handoffDurationMs: 5_000,
     });
-    expect(firstTeam.relay?.runners.map((runner) => runner.name)).toEqual([
-      "첫 주자",
-      "둘째 주자",
-    ]);
-    expect(firstTeam.relay?.legFinishBeat).toBe(30);
+    expect(firstTeam.relay?.runners).toHaveLength(30);
+    expect(
+      firstTeam.relay?.runners.slice(0, 2).map((runner) => runner.name),
+    ).toEqual(["첫 주자", "둘째 주자"]);
+    expect(firstTeam.relay?.legFinishBeat).toBe(20);
   });
 
   it("설정한 팀이 모두 입장하기 전에는 팀전을 시작하지 않는다", () => {
@@ -125,7 +141,7 @@ describe("심박 경주 규칙", () => {
       hostToken: "host-token",
       hostSocketId: "host-socket",
       mode: "relay",
-      relay: { teamCount: 2, runnersPerTeam: 3 },
+      relay: { teamCount: 2, runnersPerTeam: 3, legBeats: 20 },
     });
     const team = addPlayer(room, {
       id: "team-1",
@@ -143,7 +159,7 @@ describe("심박 경주 규칙", () => {
   it("구간 완주 뒤 5초 동안 박동을 막고 다음 주자로 전환한다", () => {
     const { room, firstTeam } = setupRelayRace(10);
     let boundary = acceptBeat(room, firstTeam.id, beat(1), 5_800);
-    for (let sequence = 2; sequence <= 5; sequence += 1) {
+    for (let sequence = 2; sequence <= 10; sequence += 1) {
       boundary = acceptBeat(
         room,
         firstTeam.id,
@@ -155,22 +171,28 @@ describe("심박 경주 규칙", () => {
     expect(boundary.handoffStarted).toBe(true);
     expect(boundary.event?.relay).toEqual({
       runnerIndex: 0,
-      handoffEndsAt: 14_000,
+      handoffEndsAt: 18_000,
+      legDistanceRatio: 1,
+      teamDistanceRatio: 0.5,
     });
     expect(firstTeam.relay?.status).toBe("handoff");
     expect(
-      acceptBeat(room, firstTeam.id, beat(6, { detectedAt: 10_000 }), 10_000)
+      acceptBeat(room, firstTeam.id, beat(11, { detectedAt: 14_000 }), 14_000)
         .reason,
     ).toBe("handoff");
 
-    expect(completeRelayHandoff(room, firstTeam.id, 13_999)).toBe(false);
-    expect(completeRelayHandoff(room, firstTeam.id, 14_000)).toBe(true);
+    expect(completeRelayHandoff(room, firstTeam.id, 17_999)).toBe(false);
+    expect(completeRelayHandoff(room, firstTeam.id, 18_000)).toBe(true);
     expect(firstTeam.relay).toMatchObject({
       activeRunnerIndex: 1,
       status: "running",
       handoffEndsAt: null,
-      legStartBeat: 5,
-      legFinishBeat: 10,
+      legStartBeat: 10,
+      legFinishBeat: 20,
+      legBeatCount: 0,
+      legDistanceRatio: 0,
+      teamDistanceRatio: 0.5,
+      completedRunners: 1,
     });
     expect(firstTeam.ready).toBe(false);
     expect(firstTeam.bpm).toBeNull();
@@ -179,29 +201,30 @@ describe("심박 경주 규칙", () => {
     const nextRunnerBeat = acceptBeat(
       room,
       firstTeam.id,
-      beat(6, { detectedAt: 14_600, bpm: 91 }),
-      14_600,
+      beat(11, { detectedAt: 18_600, bpm: 91 }),
+      18_600,
     );
     expect(nextRunnerBeat.accepted).toBe(true);
     expect(nextRunnerBeat.event?.relay?.runnerIndex).toBe(1);
-    expect(nextRunnerBeat.beatCount).toBe(6);
+    expect(nextRunnerBeat.beatCount).toBe(11);
+    expect(nextRunnerBeat.event?.relay?.legDistanceRatio).toBe(0.1);
   });
 
   it("마지막 주자는 바톤 전환 없이 팀의 완주 순위를 확정한다", () => {
     const { room, firstTeam } = setupRelayRace(10);
-    for (let sequence = 1; sequence <= 5; sequence += 1) {
+    for (let sequence = 1; sequence <= 10; sequence += 1) {
       acceptBeat(room, firstTeam.id, beat(sequence), 5_000 + sequence * 800);
     }
-    completeRelayHandoff(room, firstTeam.id, 14_000);
+    completeRelayHandoff(room, firstTeam.id, 18_000);
 
     let finish = acceptBeat(
       room,
       firstTeam.id,
-      beat(6, { detectedAt: 14_600 }),
-      14_600,
+      beat(11, { detectedAt: 18_600 }),
+      18_600,
     );
-    for (let sequence = 7; sequence <= 10; sequence += 1) {
-      const detectedAt = 14_600 + (sequence - 6) * 800;
+    for (let sequence = 12; sequence <= 20; sequence += 1) {
+      const detectedAt = 18_600 + (sequence - 11) * 800;
       finish = acceptBeat(
         room,
         firstTeam.id,
@@ -213,6 +236,38 @@ describe("심박 경주 규칙", () => {
     expect(finish.handoffStarted).toBe(false);
     expect(firstTeam.finishPlace).toBe(1);
     expect(firstTeam.relay?.activeRunnerIndex).toBe(1);
+    expect(firstTeam.relay?.completedRunners).toBe(2);
+    expect(firstTeam.distanceRatio).toBe(1);
+  });
+
+  it("원형 트랙은 네 주자마다 같은 구간을 다음 바퀴에서 재사용한다", () => {
+    const { room, firstTeam } = setupRelayRace(10, 5, "circular");
+    let sequence = 0;
+    let now = 5_000;
+
+    for (let leg = 0; leg < 4; leg += 1) {
+      for (let step = 0; step < 10; step += 1) {
+        sequence += 1;
+        now += 800;
+        acceptBeat(
+          room,
+          firstTeam.id,
+          beat(sequence, { detectedAt: now }),
+          now,
+        );
+      }
+      now += 5_000;
+      expect(completeRelayHandoff(room, firstTeam.id, now)).toBe(true);
+    }
+
+    expect(firstTeam.relay).toMatchObject({
+      activeRunnerIndex: 4,
+      sectorIndex: 0,
+      lap: 2,
+      completedRunners: 4,
+      legBeatCount: 0,
+    });
+    expect(firstTeam.distanceRatio).toBe(0.8);
   });
 
   it("카메라 준비 뒤 3·2·1을 모두 표시하도록 5.2초로 설정한다", () => {

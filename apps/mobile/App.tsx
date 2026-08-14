@@ -1005,7 +1005,10 @@ function RaceScreen({
     );
   }, [accent, beatCount, beatScale, ringOpacity, ringScale]);
 
-  const displayBeatCount = Math.max(beatCount, player?.beatCount ?? 0);
+  const displayTeamBeatCount = Math.max(beatCount, player?.beatCount ?? 0);
+  const displayBeatCount = player?.relay
+    ? Math.max(0, displayTeamBeatCount - player.relay.legStartBeat)
+    : displayTeamBeatCount;
   const progress = displayBeatCount / room.finishBeats;
   const activeRunner =
     player?.relay?.runners[player.relay.activeRunnerIndex] ?? null;
@@ -1100,10 +1103,20 @@ function RaceScreen({
           />
         )}
         <View style={styles.progressMeta}>
-          <Text style={styles.progressName}>
-            {player?.nickname ?? "나"}
-            {activeRunner ? ` · ${activeRunner.name}` : ""}
-          </Text>
+          <View style={styles.progressIdentity}>
+            <Text style={styles.progressName}>
+              {player?.nickname ?? "나"}
+              {activeRunner ? ` · ${activeRunner.name}` : ""}
+            </Text>
+            {player?.relay && (
+              <Text style={styles.progressRelayMeta}>
+                {room.trackMode === "circular"
+                  ? `${player.relay.sectorIndex + 1}구간 · ${player.relay.lap}바퀴째`
+                  : "직선 트랙 전체"}
+                {` · ${player.relay.completedRunners}/${player.relay.runners.length}명 완료`}
+              </Text>
+            )}
+          </View>
           <Text style={styles.progressCount}>
             <Text style={styles.progressCountStrong}>{displayBeatCount}</Text> /{" "}
             {room.finishBeats} 박동
@@ -1920,7 +1933,13 @@ const styles = StyleSheet.create({
     alignItems: "flex-end",
     justifyContent: "space-between",
   },
+  progressIdentity: { flex: 1, paddingRight: 12, gap: 3 },
   progressName: { color: colors.ink, fontFamily: fonts.semibold, fontSize: 15 },
+  progressRelayMeta: {
+    color: colors.muted,
+    fontFamily: fonts.medium,
+    fontSize: 10,
+  },
   progressCount: {
     color: colors.muted,
     fontFamily: fonts.medium,

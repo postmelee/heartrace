@@ -36,8 +36,8 @@ async function main(): Promise<void> {
   await started;
 
   await Promise.all([
-    sendAcceptedRange(first.socket, 0, 5, 78),
-    sendAcceptedRange(second.socket, 0, 5, 82),
+    sendAcceptedRange(first.socket, 0, 10, 78),
+    sendAcceptedRange(second.socket, 0, 10, 82),
   ]);
   const handoffRoom = await waitForRoom(
     host,
@@ -54,7 +54,7 @@ async function main(): Promise<void> {
     "각 팀의 바톤 전환은 5초 이하여야 합니다.",
   );
 
-  const rejected = await sendBeat(first.socket, 5, 78, Date.now());
+  const rejected = await sendBeat(first.socket, 10, 78, Date.now());
   assert(
     !rejected.accepted && rejected.reason === "handoff",
     "바톤 전환 중 박동은 거리에 반영하지 않아야 합니다.",
@@ -77,14 +77,14 @@ async function main(): Promise<void> {
     (room) => room.phase === "finished",
     5_000,
   );
-  await sendAcceptedRange(first.socket, 5, 10, 90);
-  await sendAcceptedRange(second.socket, 5, 10, 94);
+  await sendAcceptedRange(first.socket, 10, 20, 90);
+  await sendAcceptedRange(second.socket, 10, 20, 94);
   const finalRoom = await finished;
 
   assert(
     finalRoom.players.every(
       (player) =>
-        player.beatCount === 10 &&
+        player.beatCount === 20 &&
         player.relay?.activeRunnerIndex === 1 &&
         player.relay.status === "running",
     ),
@@ -102,7 +102,8 @@ function createRelayRoom(host: GameSocket): Promise<HostCreateRoomResponse> {
       {
         finishBeats: 10,
         mode: "relay",
-        relay: { teamCount: 2, runnersPerTeam: 2 },
+        trackMode: "circular",
+        relay: { teamCount: 2, runnersPerTeam: 2, legBeats: 10 },
       },
       (result) => {
         if (result.ok) resolve(result.data);

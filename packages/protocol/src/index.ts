@@ -3,8 +3,9 @@ export const MAX_PLAYERS = 8;
 export const MIN_TEAM_COUNT = 2;
 export const MAX_TEAM_COUNT = 4;
 export const MIN_RELAY_RUNNERS = 2;
-export const MAX_RELAY_RUNNERS = 6;
+export const MAX_RELAY_RUNNERS = 30;
 export const DEFAULT_HANDOFF_DURATION_MS = 5_000;
+export const RELAY_LEG_BEAT_OPTIONS = [10, 20, 30, 60] as const;
 export const RELAY_RUNNER_COLORS = [
   "#ff4d4f",
   "#ffad0d",
@@ -16,6 +17,7 @@ export const RELAY_RUNNER_COLORS = [
 
 export type RoomPhase = "lobby" | "countdown" | "racing" | "finished";
 export type RaceMode = "individual" | "relay";
+export type TrackMode = "straight" | "circular";
 export type RelayStatus = "running" | "handoff";
 
 export type MeasurementState = "joined" | "measuring" | "ready" | "signal_lost";
@@ -45,11 +47,18 @@ export interface PlayerRelaySnapshot {
   handoffEndsAt: number | null;
   legStartBeat: number;
   legFinishBeat: number;
+  legBeatCount: number;
+  legDistanceRatio: number;
+  teamDistanceRatio: number;
+  completedRunners: number;
+  sectorIndex: number;
+  lap: number;
 }
 
 export interface RelayRoomSettings {
   teamCount: number;
   runnersPerTeam: number;
+  legBeats: number;
   handoffDurationMs: number;
 }
 
@@ -71,6 +80,7 @@ export interface RoomSnapshot {
   code: string;
   phase: RoomPhase;
   mode: RaceMode;
+  trackMode: TrackMode;
   relaySettings: RelayRoomSettings | null;
   /** 이 스냅샷을 만든 서버의 Unix epoch(ms). 클라이언트 시계 오차 보정용 */
   serverNow: number;
@@ -120,6 +130,8 @@ export interface AcceptedBeat {
   relay: {
     runnerIndex: number;
     handoffEndsAt: number | null;
+    legDistanceRatio: number;
+    teamDistanceRatio: number;
   } | null;
 }
 
@@ -130,9 +142,11 @@ export type Ack<T> = (
 export interface HostCreateRoomRequest {
   finishBeats?: number;
   mode?: RaceMode;
+  trackMode?: TrackMode;
   relay?: {
     teamCount: number;
     runnersPerTeam: number;
+    legBeats: number;
   };
 }
 

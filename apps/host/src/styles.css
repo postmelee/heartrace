@@ -143,11 +143,16 @@ button {
 .relay-options {
   display: flex;
   gap: 8px;
+  flex-wrap: wrap;
 }
-.number-picker {
+.number-picker,
+.select-picker,
+.choice-picker {
   min-width: 154px;
 }
-.number-picker > span {
+.number-picker > span,
+.select-picker > span,
+.choice-picker > span {
   display: block;
   margin: 0 0 6px 4px;
   color: #777;
@@ -179,6 +184,49 @@ button {
 .number-picker strong {
   text-align: center;
   font-size: 14px;
+}
+.select-picker select {
+  width: 100%;
+  min-height: 52px;
+  padding: 0 16px;
+  border: 1px solid var(--line);
+  border-radius: 16px;
+  background: #fff;
+  color: var(--ink);
+  font: inherit;
+  font-size: 14px;
+  font-weight: 700;
+  cursor: pointer;
+}
+.choice-picker > div {
+  min-height: 52px;
+  padding: 4px;
+  border: 1px solid var(--line);
+  border-radius: 16px;
+  display: flex;
+  background: var(--faint);
+}
+.choice-picker button {
+  min-width: 60px;
+  flex: 1;
+  padding: 0 12px;
+  border: 0;
+  border-radius: 11px;
+  background: transparent;
+  color: #777;
+  font-weight: 700;
+  cursor: pointer;
+}
+.choice-picker button.is-selected {
+  background: #fff;
+  color: var(--ink);
+  box-shadow: 0 2px 8px rgb(0 0 0 / 8%);
+}
+.beat-choice-picker {
+  min-width: 250px;
+}
+.beat-choice-picker button {
+  min-width: 48px;
 }
 .edition {
   justify-self: end;
@@ -621,6 +669,10 @@ button {
   height: 7px;
   border-radius: 50%;
 }
+.runner-lineup .runner-lineup-more {
+  color: #555;
+  font-weight: 750;
+}
 .player-actions {
   position: relative;
   flex: 0 0 auto;
@@ -893,6 +945,11 @@ button {
   flex: 1;
   justify-content: center;
 }
+.track-list.is-circular {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  align-content: center;
+}
 .track {
   min-height: clamp(76px, 10vh, 110px);
   display: grid;
@@ -903,6 +960,14 @@ button {
 }
 .track:last-child {
   border-bottom: 1px solid var(--line);
+}
+.track.is-circular {
+  min-height: 190px;
+  padding: 14px 18px;
+  grid-template-columns: minmax(145px, 1fr) 160px 82px;
+  gap: 18px;
+  border: 1px solid var(--line);
+  border-radius: 24px;
 }
 .track-meta {
   display: flex;
@@ -998,8 +1063,14 @@ button {
   animation: beat-arrive 220ms var(--ease-out);
   z-index: 2;
 }
-.track.is-handoff .racer {
+.track.is-handoff .racer:not(.next-racer) {
   animation: handoff-pulse 900ms ease-in-out infinite alternate;
+}
+.next-racer {
+  opacity: 0.58;
+  transform: translate(0, -50%) scale(0.82);
+  animation: next-runner-arrive 260ms var(--ease-out) both;
+  z-index: 3;
 }
 .racer .heart-solid {
   width: 21px;
@@ -1036,6 +1107,65 @@ button {
 .beat-score span {
   color: #888;
   font-size: 12px;
+}
+.beat-score small {
+  display: flex;
+  margin-top: 5px;
+  color: #777;
+  font-size: 10px;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 4px;
+}
+.beat-score small i {
+  width: 58px;
+  height: 3px;
+  overflow: hidden;
+  border-radius: 999px;
+  background: #e5e5e2;
+}
+.beat-score small b {
+  display: block;
+  height: 100%;
+  border-radius: inherit;
+  background: var(--ink);
+  transition: width 220ms var(--ease-out);
+}
+.circular-track {
+  position: relative;
+  width: 150px;
+  height: 150px;
+  justify-self: center;
+}
+.circular-track svg {
+  display: block;
+  width: 100%;
+  height: 100%;
+}
+.circular-lap {
+  position: absolute;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  color: #777;
+  font-size: 12px;
+  font-weight: 800;
+  letter-spacing: 0.08em;
+}
+.circular-racer {
+  top: auto;
+  width: 36px;
+  height: 36px;
+  transform: translate(-50%, -50%);
+  transition:
+    left 220ms var(--ease-out),
+    top 220ms var(--ease-out);
+}
+.circular-racer .heart-solid {
+  width: 17px;
+}
+.circular-racer.next-racer {
+  transform: translate(-50%, -50%) scale(0.82);
 }
 .race-instruction {
   margin: 26px 0 0;
@@ -1253,7 +1383,9 @@ button {
     width: 100%;
   }
   .mode-picker,
-  .number-picker {
+  .number-picker,
+  .select-picker,
+  .choice-picker {
     flex: 1;
   }
   .edition {
@@ -1293,6 +1425,18 @@ button {
     grid-template-columns: 130px 1fr 56px;
     gap: 10px;
   }
+  .track-list.is-circular {
+    grid-template-columns: 1fr;
+  }
+  .track.is-circular {
+    grid-template-columns: 120px 120px 56px;
+    min-height: 150px;
+    padding: 10px;
+  }
+  .circular-track {
+    width: 116px;
+    height: 116px;
+  }
   .lane-number {
     display: none;
   }
@@ -1321,6 +1465,17 @@ button {
   }
   .spectator-status {
     text-align: left;
+  }
+}
+
+@keyframes next-runner-arrive {
+  from {
+    opacity: 0;
+    filter: blur(3px);
+  }
+  to {
+    opacity: 0.58;
+    filter: blur(0);
   }
 }
 

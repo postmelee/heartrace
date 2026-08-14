@@ -96,6 +96,9 @@ io.on("connection", (socket) => {
           ? {}
           : { finishBeats: request.finishBeats }),
         ...(request.mode === undefined ? {} : { mode: request.mode }),
+        ...(request.trackMode === undefined
+          ? {}
+          : { trackMode: request.trackMode }),
         ...(request.relay === undefined ? {} : { relay: request.relay }),
       });
       rooms.set(code, room);
