@@ -33,7 +33,10 @@ async function main(): Promise<void> {
 
   const first = await join(created.room.code, "첫 심장");
   const second = await join(created.room.code, "둘째 심장");
-  await Promise.all([markReady(first.socket), markReady(second.socket)]);
+  await Promise.all([
+    markReady(first.socket, 84),
+    markReady(second.socket, 96),
+  ]);
 
   const acceptedBeats: Array<{ beatCount: number; accent: boolean }> = [];
   viewer.socket.on("race:beat", (event) => acceptedBeats.push(event));
@@ -41,7 +44,7 @@ async function main(): Promise<void> {
   const finished = waitForRoom(
     viewer.socket,
     (room) => room.phase === "finished",
-    8_000,
+    12_000,
   );
   const countdownEndsAt = await new Promise<number>((resolve, reject) => {
     host.emit(
@@ -54,7 +57,7 @@ async function main(): Promise<void> {
     );
   });
 
-  await waitForRoom(host, (room) => room.phase === "racing", 5_000);
+  await waitForRoom(host, (room) => room.phase === "racing", 7_000);
   const liveBpmSnapshot = waitForRoom(
     host,
     (room) =>
@@ -95,6 +98,17 @@ async function main(): Promise<void> {
   assert(
     acceptedBeats.filter((event) => event.accent).length === 6,
     "각 참가자의 3·6·9번째 박동만 강조되어야 합니다.",
+  );
+
+  const leftRoom = waitForRoom(
+    host,
+    (snapshot) => snapshot.players.length === 1,
+    2_000,
+  );
+  await leave(first.socket);
+  assert(
+    (await leftRoom).players.every((player) => player.nickname !== "첫 심장"),
+    "명시적으로 나간 참가자는 경기 단계와 관계없이 즉시 제거되어야 합니다.",
   );
 
   console.log(
@@ -143,8 +157,8 @@ async function join(
   return { socket, session };
 }
 
-function markReady(socket: GameSocket): Promise<void> {
-  return updateMeasurement(socket, 80);
+function markReady(socket: GameSocket, bpm: number): Promise<void> {
+  return updateMeasurement(socket, bpm);
 }
 
 function updateMeasurement(socket: GameSocket, bpm: number): Promise<void> {
@@ -160,22 +174,33 @@ function updateMeasurement(socket: GameSocket, bpm: number): Promise<void> {
   });
 }
 
+function leave(socket: GameSocket): Promise<void> {
+  return new Promise((resolve, reject) => {
+    socket.emit("player:leave", (result) => {
+      if (result.ok) resolve();
+      else reject(new Error(result.error));
+    });
+  });
+}
+
 async function sendBeats(
   socket: GameSocket,
   count: number,
   bpm: number,
 ): Promise<void> {
   const ibiMs = Math.round(60_000 / bpm);
+  const firstDetectedAt = Date.now() - (count - 1) * ibiMs;
   for (let sequence = 0; sequence < count; sequence += 1) {
     const event: BeatEvent = {
       id: randomUUID(),
       sequence,
-      detectedAt: Date.now(),
+      detectedAt: firstDetectedAt + sequence * ibiMs,
       ibiMs,
       bpm,
       // 첫 박동은 빠르게 변하는 실제 심박 상황의 보정 하한을 검증합니다.
       confidence: sequence === 0 ? 0.53 : 0.92,
       signalQuality: sequence === 0 ? 0.41 : 0.9,
+      source: "observed",
     };
     const result = await new Promise<BeatAck>((resolve, reject) => {
       socket.emit("player:beat", event, (ack) => {

@@ -38,11 +38,29 @@ function beat(sequence: number, overrides: Partial<BeatEvent> = {}): BeatEvent {
     bpm: 75,
     confidence: 0.9,
     signalQuality: 0.9,
+    source: "observed",
     ...overrides,
   };
 }
 
 describe("심박 경주 규칙", () => {
+  it("카메라 준비 뒤 3·2·1을 모두 표시하도록 5.2초로 설정한다", () => {
+    const room = createRoomState({
+      code: "COUNT",
+      hostToken: "host-token",
+      hostSocketId: "host-socket",
+    });
+    const player = addPlayer(room, {
+      id: "player-1",
+      token: "player-token",
+      socketId: "player-socket",
+      nickname: "준비된 심장",
+    });
+    updateMeasurement(player, { state: "ready", bpm: 72, signalQuality: 0.9 });
+
+    expect(startCountdown(room, 1_000)).toBe(6_200);
+  });
+
   it("연결이 끊긴 참가자가 있으면 경기를 시작하지 않는다", () => {
     const room = createRoomState({
       code: "WAIT",
@@ -83,6 +101,7 @@ describe("심박 경주 규칙", () => {
     expect(first.event?.distanceRatio).toBe(0.1);
     expect(second.event?.distanceRatio).toBe(0.2);
     expect(second.beatCount).toBe(2);
+    expect(second.event?.bpm).toBe(160);
   });
 
   it("3번째 박동은 이동량이 아니라 시각 강조만 켠다", () => {
@@ -131,22 +150,115 @@ describe("심박 경주 규칙", () => {
     expect(tooFast.reason).toBe("invalid_interval");
   });
 
-  it("빠르게 변하는 심박은 최소 품질을 만족하면 승인한다", () => {
+  it("앱이 관측한 빠른 심박 변화는 서버가 다시 보류하지 않는다", () => {
     const { room } = setupRace();
-    const result = acceptBeat(
+    const first = acceptBeat(
       room,
       "player-1",
       beat(1, {
         bpm: 140,
         ibiMs: 429,
+        detectedAt: 5_429,
         confidence: 0.53,
         signalQuality: 0.41,
       }),
       5_429,
     );
+    const confirmed = acceptBeat(
+      room,
+      "player-1",
+      beat(2, {
+        bpm: 140,
+        ibiMs: 429,
+        detectedAt: 5_858,
+        confidence: 0.53,
+        signalQuality: 0.41,
+      }),
+      5_858,
+    );
 
-    expect(result.accepted).toBe(true);
-    expect(result.event?.bpm).toBe(140);
+    expect(first.accepted).toBe(true);
+    expect(confirmed.accepted).toBe(true);
+    expect(confirmed.event?.bpm).toBe(140);
+    expect(confirmed.beatCount).toBe(2);
+  });
+
+  it("보간 박동은 실제 관측 사이에 한 번만 승인한다", () => {
+    const { room } = setupRace();
+    const stable = acceptBeat(room, "player-1", beat(1), 5_800);
+    const bridged = acceptBeat(
+      room,
+      "player-1",
+      beat(2, { detectedAt: 6_600, source: "bridged" }),
+      6_600,
+    );
+    const duplicateBridge = acceptBeat(
+      room,
+      "player-1",
+      beat(3, { detectedAt: 7_400, source: "bridged" }),
+      7_400,
+    );
+    const recovered = acceptBeat(
+      room,
+      "player-1",
+      beat(4, { detectedAt: 8_200 }),
+      8_200,
+    );
+
+    expect(stable.accepted).toBe(true);
+    expect(bridged.accepted).toBe(true);
+    expect(bridged.event?.source).toBe("bridged");
+    expect(duplicateBridge.reason).toBe("invalid_interval");
+    expect(recovered.accepted).toBe(true);
+    expect(recovered.beatCount).toBe(3);
+    expect(recovered.event?.bpm).toBe(75);
+  });
+
+  it("직전 승인 직후 너무 빠르게 도착한 이벤트를 거부한다", () => {
+    const { room } = setupRace();
+    acceptBeat(room, "player-1", beat(1), 5_800);
+    const inconsistent = acceptBeat(
+      room,
+      "player-1",
+      beat(2, { detectedAt: 5_950, ibiMs: 800 }),
+      5_950,
+    );
+
+    expect(inconsistent.reason).toBe("invalid_interval");
+    expect(inconsistent.beatCount).toBe(1);
+  });
+
+  it("앱이 중간 peak를 보류해도 다음 정상 박동 한 번은 승인한다", () => {
+    const { room } = setupRace();
+    acceptBeat(room, "player-1", beat(1), 5_800);
+    const recovered = acceptBeat(
+      room,
+      "player-1",
+      beat(2, { detectedAt: 7_400, ibiMs: 800 }),
+      7_400,
+    );
+
+    expect(recovered.accepted).toBe(true);
+    expect(recovered.beatCount).toBe(2);
+  });
+
+  it("너무 오래되었거나 미래 시각인 이벤트를 거부한다", () => {
+    const { room } = setupRace();
+    const old = acceptBeat(
+      room,
+      "player-1",
+      beat(1, { detectedAt: 1_000 }),
+      20_001,
+    );
+    const future = acceptBeat(
+      room,
+      "player-1",
+      beat(2, { detectedAt: 30_001 }),
+      20_000,
+    );
+
+    expect(old.reason).toBe("invalid_interval");
+    expect(future.reason).toBe("invalid_interval");
   });
 
   it("결승 박동을 받은 뒤 순위를 확정하고 경기를 끝낸다", () => {

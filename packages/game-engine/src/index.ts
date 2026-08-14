@@ -12,14 +12,18 @@ import {
 
 const MIN_IBI_MS = 270;
 const MAX_IBI_MS = 2_000;
-const MIN_CONFIDENCE = 0.52;
-const MIN_SIGNAL_QUALITY = 0.4;
+const MIN_CONFIDENCE = 0.35;
+const MIN_SIGNAL_QUALITY = 0.3;
+const MAX_BEAT_EVENT_AGE_MS = 15_000;
+const MAX_BEAT_EVENT_FUTURE_MS = 5_000;
 
 export interface PlayerState extends PlayerSnapshot {
   token: string;
   socketId: string | null;
   lastSequence: number;
   seenBeatIds: Set<string>;
+  lastAcceptedDetectedAt: number | null;
+  bridgedSinceObserved: number;
 }
 
 export interface RoomState {
@@ -104,6 +108,8 @@ export function addPlayer(
     finishPlace: null,
     lastSequence: -1,
     seenBeatIds: new Set(),
+    lastAcceptedDetectedAt: null,
+    bridgedSinceObserved: 0,
   };
   room.players.set(player.id, player);
   return player;
@@ -159,7 +165,9 @@ export function startCountdown(room: RoomState, now: number): number {
 
   resetRaceProgress(room);
   room.phase = "countdown";
-  room.countdownEndsAt = now + 3_600;
+  // 경기용 카메라가 다시 마운트되는 동안에는 '준비'를 보여주고, 그 뒤
+  // 3·2·1이 각각 온전히 1초씩 보이도록 2.2초의 준비 시간을 둡니다.
+  room.countdownEndsAt = now + 5_200;
   return room.countdownEndsAt;
 }
 
@@ -194,8 +202,24 @@ export function acceptBeat(
   if (room.phase !== "racing") return rejected("not_racing", player.beatCount);
   if (player.seenBeatIds.has(beat.id))
     return rejected("duplicate", player.beatCount);
-  if (beat.sequence <= player.lastSequence) {
+  if (
+    !Number.isSafeInteger(beat.sequence) ||
+    beat.sequence <= player.lastSequence
+  ) {
     return rejected("out_of_order", player.beatCount);
+  }
+  if (
+    ![
+      beat.detectedAt,
+      beat.ibiMs,
+      beat.bpm,
+      beat.confidence,
+      beat.signalQuality,
+    ].every(Number.isFinite) ||
+    beat.detectedAt < acceptedAt - MAX_BEAT_EVENT_AGE_MS ||
+    beat.detectedAt > acceptedAt + MAX_BEAT_EVENT_FUTURE_MS
+  ) {
+    return rejected("invalid_interval", player.beatCount);
   }
   if (
     beat.confidence < MIN_CONFIDENCE ||
@@ -207,12 +231,32 @@ export function acceptBeat(
     return rejected("invalid_interval", player.beatCount);
   }
 
+  const detectedInterval =
+    player.lastAcceptedDetectedAt === null
+      ? null
+      : beat.detectedAt - player.lastAcceptedDetectedAt;
+  if (detectedInterval !== null && detectedInterval < MIN_IBI_MS * 0.8) {
+    return rejected("invalid_interval", player.beatCount);
+  }
+  if (beat.source === "bridged" && player.bridgedSinceObserved >= 1) {
+    return rejected("invalid_interval", player.beatCount);
+  }
+
   player.seenBeatIds.add(beat.id);
   if (player.seenBeatIds.size > 256) {
     const oldest = player.seenBeatIds.values().next().value;
     if (typeof oldest === "string") player.seenBeatIds.delete(oldest);
   }
   player.lastSequence = beat.sequence;
+  if (beat.source === "observed") {
+    player.bridgedSinceObserved = 0;
+  } else {
+    player.bridgedSinceObserved += 1;
+  }
+  player.lastAcceptedDetectedAt = beat.detectedAt;
+  // BPM 안정화와 cadence 전환 판정은 원시 PPG를 가진 앱이 담당합니다.
+  // 서버가 다시 과거 IBI와 비교하면 정상적인 급상승과 신호 회복까지
+  // 연쇄적으로 누락되므로 여기서는 절대 범위와 이벤트 순서만 검증합니다.
   player.bpm = Math.max(30, Math.min(220, Math.round(beat.bpm)));
   player.signalQuality = clamp01(beat.signalQuality);
   player.beatCount += 1;
@@ -231,6 +275,7 @@ export function acceptBeat(
     distanceRatio: player.distanceRatio,
     accent: player.beatCount % 3 === 0,
     acceptedAt,
+    source: beat.source,
   };
 
   const connectedPlayers = [...room.players.values()].filter(
@@ -274,6 +319,7 @@ export function toSnapshot(room: RoomState): RoomSnapshot {
   return {
     code: room.code,
     phase: room.phase,
+    serverNow: Date.now(),
     finishBeats: room.finishBeats,
     hostConnected: room.hostSocketId !== null,
     players,
@@ -291,6 +337,8 @@ function resetRaceProgress(room: RoomState): void {
     player.finishPlace = null;
     player.lastSequence = -1;
     player.seenBeatIds.clear();
+    player.lastAcceptedDetectedAt = null;
+    player.bridgedSinceObserved = 0;
   }
 }
 

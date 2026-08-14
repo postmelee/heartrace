@@ -14,6 +14,8 @@ export type BeatRejectReason =
   | "invalid_interval"
   | "finished";
 
+export type BeatSource = "observed" | "bridged";
+
 export interface PlayerSnapshot {
   id: string;
   nickname: string;
@@ -30,6 +32,8 @@ export interface PlayerSnapshot {
 export interface RoomSnapshot {
   code: string;
   phase: RoomPhase;
+  /** 이 스냅샷을 만든 서버의 Unix epoch(ms). 클라이언트 시계 오차 보정용 */
+  serverNow: number;
   finishBeats: number;
   hostConnected: boolean;
   players: PlayerSnapshot[];
@@ -52,6 +56,8 @@ export interface BeatEvent {
   confidence: number;
   /** 0~1 범위의 손가락/신호 품질 */
   signalQuality: number;
+  /** 카메라에서 관측했는지, 한 번의 짧은 공백을 이어 준 박동인지 구분합니다. */
+  source: BeatSource;
 }
 
 export interface MeasurementUpdate {
@@ -70,6 +76,7 @@ export interface AcceptedBeat {
   /** 3번째마다 큰 피드백을 표시하기 위한 값. 이동 거리는 늘리지 않습니다. */
   accent: boolean;
   acceptedAt: number;
+  source: BeatSource;
 }
 
 export type Ack<T> = (

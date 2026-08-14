@@ -6,6 +6,7 @@ import {
   type ReactNode,
 } from "react";
 import {
+  Alert,
   Animated,
   Easing,
   Keyboard,
@@ -14,6 +15,7 @@ import {
   Platform,
   Pressable,
   ScrollView,
+  Share,
   StyleSheet,
   Text,
   TextInput,
@@ -102,6 +104,7 @@ function HeartRaceApp() {
         bpm: beat.bpm,
         confidence: beat.confidence,
         signalQuality: beat.signalQuality,
+        source: beat.source ?? "observed",
       };
       game.sendBeat(event);
     },
@@ -134,8 +137,7 @@ function HeartRaceApp() {
       sequenceRef.current = 0;
       game.resetBeatDelivery();
     }
-    if (game.room?.phase === "racing") heartRate.resetCadence();
-  }, [game.resetBeatDelivery, game.room?.phase, heartRate.resetCadence]);
+  }, [game.resetBeatDelivery, game.room?.phase]);
 
   useEffect(() => {
     if (!game.session || !game.room || game.room.phase === "finished") return;
@@ -169,22 +171,17 @@ function HeartRaceApp() {
   ]);
 
   const cameraActive = measurementEnabled && source === "camera";
-  const hiddenCameraActive = cameraActive && game.room?.phase !== "lobby";
+  const sharePpgTrace = useCallback(() => {
+    void Share.share({
+      title: "심장 달리기 PPG 진단 로그",
+      message: heartRate.exportTrace(),
+    }).catch(() => {
+      Alert.alert("공유할 수 없습니다", "진단 로그 공유를 다시 시도해 주세요.");
+    });
+  }, [heartRate.exportTrace]);
 
   return (
     <View style={styles.root}>
-      {hiddenCameraActive && (
-        <PpgCamera
-          active
-          onSample={heartRate.onFrameSample}
-          onPermission={setCameraPermission}
-          onRunningChange={setCameraRunning}
-          onTorchChange={setTorchEnabled}
-          onTorchError={setTorchError}
-          preferredLens={cameraLens}
-          onDeviceInfo={setCameraDeviceInfo}
-        />
-      )}
       <View style={styles.opaqueContent}>
         {game.restoring ? (
           <RestoringScreen />
@@ -194,95 +191,123 @@ function HeartRaceApp() {
             notice={game.notice}
             onJoin={game.join}
           />
-        ) : game.room.phase === "lobby" ? (
-          <MeasurementScreen
-            room={game.room}
-            player={findPlayer(game.room, game.session.playerId)}
-            nickname={game.session.nickname}
-            connected={game.connected}
-            measurement={heartRate.state}
-            measurementStarted={measurementStarted}
-            source={source}
-            cameraPermission={cameraPermission}
-            cameraRunning={cameraRunning}
-            torchEnabled={torchEnabled}
-            torchError={torchError}
-            cameraLens={cameraLens}
-            cameraDeviceInfo={cameraDeviceInfo}
-            cameraPreview={
-              cameraActive ? (
-                <PpgCamera
-                  active
-                  visible
-                  onSample={heartRate.onFrameSample}
-                  onPermission={setCameraPermission}
-                  onRunningChange={setCameraRunning}
-                  onTorchChange={setTorchEnabled}
-                  onTorchError={setTorchError}
-                  preferredLens={cameraLens}
-                  onDeviceInfo={setCameraDeviceInfo}
-                />
-              ) : null
-            }
-            simulatorBpm={simulatorBpm}
-            onSimulatorBpm={setSimulatorBpm}
-            onToggleSource={
-              DEV_SIMULATOR
-                ? () => {
-                    heartRate.reset();
-                    setTorchError(null);
-                    setSource((value) =>
-                      value === "camera" ? "simulator" : "camera",
-                    );
-                  }
-                : undefined
-            }
-            onStartMeasurement={() => {
-              heartRate.reset();
-              setCameraRunning(false);
-              setTorchEnabled(false);
-              setTorchError(null);
-              setMeasurementStarted(true);
-            }}
-            onToggleCameraLens={() => {
-              const selectable = cameraDeviceInfo?.availableLenses.filter(
-                (lens) => lens.hasTorch,
-              );
-              if (!selectable || selectable.length < 2) return;
-              const activeIndex = selectable.findIndex(
-                (lens) => lens.lens === cameraLens,
-              );
-              const next = selectable[(activeIndex + 1) % selectable.length];
-              if (!next) return;
-              heartRate.reset();
-              setCameraRunning(false);
-              setTorchEnabled(false);
-              setTorchError(null);
-              setCameraLens(next.lens);
-            }}
-            onLeave={game.leave}
-          />
-        ) : game.room.phase === "countdown" ? (
-          <CountdownScreen room={game.room} />
-        ) : game.room.phase === "racing" ? (
-          <RaceScreen
-            room={game.room}
-            player={findPlayer(game.room, game.session.playerId)}
-            connected={game.connected}
-            measurement={heartRate.state}
-            beatCount={game.lastOwnBeat?.beatCount ?? 0}
-            accent={game.lastOwnBeat?.accent ?? false}
-            beatDelivery={game.beatDelivery}
-            source={source}
-            simulatorBpm={simulatorBpm}
-            onSimulatorBpm={setSimulatorBpm}
-          />
-        ) : (
+        ) : game.room.phase === "finished" ? (
           <FinishScreen
             room={game.room}
             playerId={game.session.playerId}
+            onShareDiagnostics={sharePpgTrace}
             onLeave={game.leave}
           />
+        ) : (
+          <View style={styles.activePhaseStack}>
+            <MeasurementScreen
+              room={game.room}
+              player={findPlayer(game.room, game.session.playerId)}
+              nickname={game.session.nickname}
+              connected={game.connected}
+              measurement={heartRate.state}
+              measurementStarted={measurementStarted}
+              source={source}
+              cameraPermission={cameraPermission}
+              cameraRunning={cameraRunning}
+              torchEnabled={torchEnabled}
+              torchError={torchError}
+              cameraLens={cameraLens}
+              cameraDeviceInfo={cameraDeviceInfo}
+              cameraPreview={
+                cameraActive ? (
+                  <PpgCamera
+                    active
+                    visible
+                    onSample={heartRate.onFrameSample}
+                    onPermission={setCameraPermission}
+                    onRunningChange={setCameraRunning}
+                    onTorchChange={setTorchEnabled}
+                    onTorchError={setTorchError}
+                    preferredLens={cameraLens}
+                    onDeviceInfo={setCameraDeviceInfo}
+                  />
+                ) : null
+              }
+              simulatorBpm={simulatorBpm}
+              onSimulatorBpm={setSimulatorBpm}
+              onToggleSource={
+                DEV_SIMULATOR
+                  ? () => {
+                      heartRate.reset();
+                      setTorchError(null);
+                      setSource((value) =>
+                        value === "camera" ? "simulator" : "camera",
+                      );
+                    }
+                  : undefined
+              }
+              onStartMeasurement={() => {
+                heartRate.reset();
+                setCameraRunning(false);
+                setTorchEnabled(false);
+                setTorchError(null);
+                setMeasurementStarted(true);
+              }}
+              onToggleCameraLens={() => {
+                const selectable = cameraDeviceInfo?.availableLenses.filter(
+                  (lens) => lens.hasTorch,
+                );
+                if (!selectable || selectable.length < 2) return;
+                const activeIndex = selectable.findIndex(
+                  (lens) => lens.lens === cameraLens,
+                );
+                const next = selectable[(activeIndex + 1) % selectable.length];
+                if (!next) return;
+                heartRate.reset();
+                setCameraRunning(false);
+                setTorchEnabled(false);
+                setTorchError(null);
+                setCameraLens(next.lens);
+              }}
+              onShareDiagnostics={sharePpgTrace}
+              onLeave={game.leave}
+            />
+            {game.room.phase === "countdown" && (
+              <View style={styles.activePhaseOverlay}>
+                <CountdownScreen room={game.room} />
+              </View>
+            )}
+            {game.room.phase === "racing" && (
+              <View style={styles.activePhaseOverlay}>
+                <RaceScreen
+                  room={game.room}
+                  player={findPlayer(game.room, game.session.playerId)}
+                  connected={game.connected}
+                  measurement={heartRate.state}
+                  beatCount={game.lastOwnBeat?.beatCount ?? 0}
+                  accent={game.lastOwnBeat?.accent ?? false}
+                  beatDelivery={game.beatDelivery}
+                  source={source}
+                  simulatorBpm={simulatorBpm}
+                  onSimulatorBpm={setSimulatorBpm}
+                  onShareDiagnostics={sharePpgTrace}
+                  onLeave={() => {
+                    Alert.alert(
+                      "경기에서 나갈까요?",
+                      "현재 경기의 진행 기록은 사라집니다.",
+                      [
+                        { text: "계속 경기하기", style: "cancel" },
+                        {
+                          text: "경기 나가기",
+                          style: "destructive",
+                          onPress: () => {
+                            heartRate.reset();
+                            game.leave();
+                          },
+                        },
+                      ],
+                    );
+                  }}
+                />
+              </View>
+            )}
+          </View>
         )}
       </View>
     </View>
@@ -512,6 +537,7 @@ function MeasurementScreen({
   onToggleSource,
   onStartMeasurement,
   onToggleCameraLens,
+  onShareDiagnostics,
   onLeave,
 }: {
   room: RoomSnapshot;
@@ -533,6 +559,7 @@ function MeasurementScreen({
   onToggleSource?: (() => void) | undefined;
   onStartMeasurement: () => void;
   onToggleCameraLens: () => void;
+  onShareDiagnostics: () => void;
   onLeave: () => void;
 }) {
   const readyHapticRef = useRef(false);
@@ -624,6 +651,8 @@ function MeasurementScreen({
                 {Math.round(measurement.signalQuality * 100)}% · 노출{" "}
                 {cameraDeviceInfo?.exposureBias.toFixed(1) ?? "—"} EV ·{" "}
                 {cameraCalibrationLabel(cameraDeviceInfo?.calibration)}
+                {" · "}
+                {measurement.diagnostics.decision}
               </Text>
             )}
         </View>
@@ -718,6 +747,11 @@ function MeasurementScreen({
         {measurementStarted && source === "camera" && torchError && (
           <Text style={styles.cameraErrorText}>{torchError}</Text>
         )}
+        {measurementStarted && source === "camera" && SHOW_DIAGNOSTICS && (
+          <Pressable onPress={onShareDiagnostics} hitSlop={12}>
+            <Text style={styles.devLink}>숫자형 PPG 진단 로그 공유</Text>
+          </Pressable>
+        )}
         <Text style={styles.footerHint}>
           {!measurementStarted
             ? "측정 전에는 카메라와 플래시를 사용하지 않습니다."
@@ -731,8 +765,9 @@ function MeasurementScreen({
 }
 
 function CountdownScreen({ room }: { room: RoomSnapshot }) {
-  const [now, setNow] = useState(Date.now());
-  const scale = useRef(new Animated.Value(0.78)).current;
+  const [clockOffset] = useState(() => room.serverNow - Date.now());
+  const [now, setNow] = useState(() => Date.now() + clockOffset);
+  const scale = useRef(new Animated.Value(0.72)).current;
   const remaining = Math.max(0, (room.countdownEndsAt ?? now) - now);
   const display =
     remaining > 3_000
@@ -740,28 +775,44 @@ function CountdownScreen({ room }: { room: RoomSnapshot }) {
       : String(Math.max(1, Math.ceil(remaining / 1_000)));
 
   useEffect(() => {
-    const timer = setInterval(() => setNow(Date.now()), 40);
+    const timer = setInterval(() => setNow(Date.now() + clockOffset), 50);
     return () => clearInterval(timer);
-  }, []);
+  }, [clockOffset]);
 
   useEffect(() => {
-    scale.setValue(0.78);
-    Animated.spring(scale, {
-      toValue: 1,
-      damping: 13,
-      stiffness: 180,
-      mass: 0.7,
-      useNativeDriver: true,
-    }).start();
-    if (display !== "준비")
+    scale.stopAnimation();
+    scale.setValue(0.72);
+    const animation = Animated.sequence([
+      Animated.timing(scale, {
+        toValue: 1.08,
+        duration: 140,
+        easing: Easing.out(Easing.cubic),
+        useNativeDriver: true,
+      }),
+      Animated.spring(scale, {
+        toValue: 1,
+        damping: 15,
+        stiffness: 210,
+        mass: 0.65,
+        useNativeDriver: true,
+      }),
+    ]);
+    animation.start();
+    if (display !== "준비") {
       void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+    }
+    return () => animation.stop();
   }, [display, scale]);
 
   return (
     <SafeAreaView edges={["top", "bottom"]} style={styles.countdownScreen}>
       <Text style={styles.countdownHint}>손가락을 그대로 유지하세요</Text>
       <Animated.Text
-        style={[styles.countdownNumber, { transform: [{ scale }] }]}
+        style={[
+          styles.countdownNumber,
+          display === "준비" && styles.countdownReady,
+          { transform: [{ scale }] },
+        ]}
       >
         {display}
       </Animated.Text>
@@ -781,6 +832,8 @@ function RaceScreen({
   source,
   simulatorBpm,
   onSimulatorBpm,
+  onShareDiagnostics,
+  onLeave,
 }: {
   room: RoomSnapshot;
   player: PlayerSnapshot | undefined;
@@ -792,6 +845,8 @@ function RaceScreen({
   source: HeartRateSource;
   simulatorBpm: number;
   onSimulatorBpm: (bpm: number) => void;
+  onShareDiagnostics: () => void;
+  onLeave: () => void;
 }) {
   const beatScale = useRef(new Animated.Value(1)).current;
   const ringScale = useRef(new Animated.Value(0.7)).current;
@@ -849,7 +904,21 @@ function RaceScreen({
           <View style={styles.liveBlackDot} />
           <Text style={styles.liveText}>경기 중</Text>
         </View>
-        <ConnectionPill connected={connected} />
+        <View style={styles.raceTopActions}>
+          <ConnectionPill connected={connected} />
+          <Pressable
+            accessibilityRole="button"
+            accessibilityLabel="경기 나가기"
+            hitSlop={10}
+            onPress={onLeave}
+            style={({ pressed }) => [
+              styles.raceLeaveButton,
+              pressed && styles.raceLeaveButtonPressed,
+            ]}
+          >
+            <Text style={styles.raceLeaveText}>나가기</Text>
+          </Pressable>
+        </View>
       </View>
 
       <View style={styles.bpmStage}>
@@ -870,11 +939,13 @@ function RaceScreen({
         </Animated.Text>
         <Text style={styles.bpmUnit}>BPM</Text>
         <Text style={styles.raceSignalText}>
-          {measurement.fingerDetected && measurement.bpm !== null
-            ? "한 번의 박동이 한 걸음이 됩니다"
-            : measurement.fingerDetected
-              ? "새 박동을 찾고 있습니다"
-              : "손가락으로 카메라와 플래시를 다시 덮어주세요"}
+          {measurement.holdingSignal
+            ? "마지막 박동 리듬으로 잠시 이어가고 있어요"
+            : measurement.fingerDetected && measurement.bpm !== null
+              ? "한 번의 박동이 한 걸음이 됩니다"
+              : measurement.fingerDetected
+                ? "새 박동을 찾고 있습니다"
+                : "손가락으로 카메라와 플래시를 다시 덮어주세요"}
         </Text>
         {(beatDelivery.lastReason || SHOW_DIAGNOSTICS) && (
           <View style={styles.beatDeliveryStatus}>
@@ -889,12 +960,17 @@ function RaceScreen({
               </Text>
             )}
             {SHOW_DIAGNOSTICS && (
-              <Text style={styles.beatDeliveryDebug}>
-                검출 {beatDelivery.attempted} · 승인 {beatDelivery.accepted} ·
-                제외 {beatDelivery.rejected} · 품질{" "}
-                {Math.round(measurement.signalQuality * 100)}% · 신뢰{" "}
-                {Math.round((measurement.lastBeat?.confidence ?? 0) * 100)}%
-              </Text>
+              <>
+                <Text style={styles.beatDeliveryDebug}>
+                  검출 {beatDelivery.attempted} · 승인 {beatDelivery.accepted} ·
+                  제외 {beatDelivery.rejected} · 품질{" "}
+                  {Math.round(measurement.signalQuality * 100)}% · 신뢰{" "}
+                  {Math.round((measurement.lastBeat?.confidence ?? 0) * 100)}%
+                </Text>
+                <Pressable onPress={onShareDiagnostics} hitSlop={10}>
+                  <Text style={styles.devLink}>PPG 로그 공유</Text>
+                </Pressable>
+              </>
             )}
           </View>
         )}
@@ -939,10 +1015,12 @@ function RaceScreen({
 function FinishScreen({
   room,
   playerId,
+  onShareDiagnostics,
   onLeave,
 }: {
   room: RoomSnapshot;
   playerId: string;
+  onShareDiagnostics: () => void;
   onLeave: () => void;
 }) {
   const player = findPlayer(room, playerId);
@@ -994,6 +1072,11 @@ function FinishScreen({
           </View>
         ))}
       </View>
+      {SHOW_DIAGNOSTICS && (
+        <Pressable onPress={onShareDiagnostics} hitSlop={12}>
+          <Text style={styles.devLink}>이번 경기 PPG 로그 공유</Text>
+        </Pressable>
+      )}
       <PrimaryButton label="처음으로" onPress={onLeave} />
     </SafeAreaView>
   );
@@ -1224,6 +1307,15 @@ function beatDeliveryReasonLabel(reason: BeatDeliveryReason): string {
 const styles = StyleSheet.create({
   root: { flex: 1, backgroundColor: colors.paper },
   opaqueContent: { flex: 1, backgroundColor: colors.paper },
+  activePhaseStack: { flex: 1 },
+  activePhaseOverlay: {
+    position: "absolute",
+    top: 0,
+    right: 0,
+    bottom: 0,
+    left: 0,
+    backgroundColor: colors.paper,
+  },
   loadingBackground: { flex: 1, backgroundColor: colors.paper },
   flex: { flex: 1 },
   screen: { flex: 1, paddingHorizontal: 24, backgroundColor: colors.paper },
@@ -1503,6 +1595,11 @@ const styles = StyleSheet.create({
     lineHeight: 210,
     letterSpacing: -11,
   },
+  countdownReady: {
+    fontSize: 76,
+    lineHeight: 92,
+    letterSpacing: -4,
+  },
   countdownBottom: {
     color: colors.ink,
     fontFamily: fonts.semibold,
@@ -1517,6 +1614,21 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "space-between",
+  },
+  raceTopActions: { flexDirection: "row", alignItems: "center", gap: 10 },
+  raceLeaveButton: {
+    minHeight: 36,
+    paddingHorizontal: 13,
+    borderRadius: 18,
+    backgroundColor: colors.faint,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  raceLeaveButtonPressed: { opacity: 0.55 },
+  raceLeaveText: {
+    color: colors.muted,
+    fontFamily: fonts.medium,
+    fontSize: 12,
   },
   liveLabel: { flexDirection: "row", alignItems: "center", gap: 8 },
   liveBlackDot: {
