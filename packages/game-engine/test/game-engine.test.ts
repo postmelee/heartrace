@@ -4,6 +4,7 @@ import {
   acceptBeat,
   addPlayer,
   beginRace,
+  completeRelayHandoff,
   createRoomState,
   removePlayer,
   startCountdown,
@@ -29,6 +30,43 @@ function setupRace(finishBeats = 10) {
   return { room, player };
 }
 
+function setupRelayRace(finishBeats = 10) {
+  const room = createRoomState({
+    code: "TEAM",
+    hostToken: "host-token",
+    hostSocketId: "host-socket",
+    finishBeats,
+    mode: "relay",
+    relay: { teamCount: 2, runnersPerTeam: 2 },
+  });
+  const firstTeam = addPlayer(room, {
+    id: "team-1",
+    token: "team-token-1",
+    socketId: "team-socket-1",
+    nickname: "빨간 심장",
+    runnerNames: ["첫 주자", "둘째 주자"],
+  });
+  const secondTeam = addPlayer(room, {
+    id: "team-2",
+    token: "team-token-2",
+    socketId: "team-socket-2",
+    nickname: "파란 심장",
+  });
+  updateMeasurement(firstTeam, {
+    state: "ready",
+    bpm: 72,
+    signalQuality: 0.9,
+  });
+  updateMeasurement(secondTeam, {
+    state: "ready",
+    bpm: 76,
+    signalQuality: 0.9,
+  });
+  startCountdown(room, 1_000);
+  beginRace(room, 5_000);
+  return { room, firstTeam, secondTeam };
+}
+
 function beat(sequence: number, overrides: Partial<BeatEvent> = {}): BeatEvent {
   return {
     id: `beat-${sequence}`,
@@ -44,6 +82,139 @@ function beat(sequence: number, overrides: Partial<BeatEvent> = {}): BeatEvent {
 }
 
 describe("심박 경주 규칙", () => {
+  it("허용 범위를 벗어난 팀전 설정을 거부한다", () => {
+    expect(() =>
+      createRoomState({
+        code: "BAD1",
+        hostToken: "host-token",
+        hostSocketId: "host-socket",
+        mode: "relay",
+        relay: { teamCount: 1, runnersPerTeam: 3 },
+      }),
+    ).toThrow("팀 수는 2~4팀이어야 합니다.");
+    expect(() =>
+      createRoomState({
+        code: "BAD2",
+        hostToken: "host-token",
+        hostSocketId: "host-socket",
+        mode: "relay",
+        relay: { teamCount: 2, runnersPerTeam: 7 },
+      }),
+    ).toThrow("팀별 주자는 2~6명이어야 합니다.");
+  });
+
+  it("팀전 방에 팀 수와 주자 수, 동일한 구간 경계를 만든다", () => {
+    const { room, firstTeam } = setupRelayRace(60);
+
+    expect(room.mode).toBe("relay");
+    expect(room.relaySettings).toEqual({
+      teamCount: 2,
+      runnersPerTeam: 2,
+      handoffDurationMs: 5_000,
+    });
+    expect(firstTeam.relay?.runners.map((runner) => runner.name)).toEqual([
+      "첫 주자",
+      "둘째 주자",
+    ]);
+    expect(firstTeam.relay?.legFinishBeat).toBe(30);
+  });
+
+  it("설정한 팀이 모두 입장하기 전에는 팀전을 시작하지 않는다", () => {
+    const room = createRoomState({
+      code: "WAIT",
+      hostToken: "host-token",
+      hostSocketId: "host-socket",
+      mode: "relay",
+      relay: { teamCount: 2, runnersPerTeam: 3 },
+    });
+    const team = addPlayer(room, {
+      id: "team-1",
+      token: "team-token",
+      socketId: "team-socket",
+      nickname: "한 팀",
+    });
+    updateMeasurement(team, { state: "ready", bpm: 72, signalQuality: 0.9 });
+
+    expect(() => startCountdown(room, 1_000)).toThrow(
+      "2팀이 모두 입장해야 경기를 시작할 수 있습니다.",
+    );
+  });
+
+  it("구간 완주 뒤 5초 동안 박동을 막고 다음 주자로 전환한다", () => {
+    const { room, firstTeam } = setupRelayRace(10);
+    let boundary = acceptBeat(room, firstTeam.id, beat(1), 5_800);
+    for (let sequence = 2; sequence <= 5; sequence += 1) {
+      boundary = acceptBeat(
+        room,
+        firstTeam.id,
+        beat(sequence),
+        5_000 + sequence * 800,
+      );
+    }
+
+    expect(boundary.handoffStarted).toBe(true);
+    expect(boundary.event?.relay).toEqual({
+      runnerIndex: 0,
+      handoffEndsAt: 14_000,
+    });
+    expect(firstTeam.relay?.status).toBe("handoff");
+    expect(
+      acceptBeat(room, firstTeam.id, beat(6, { detectedAt: 10_000 }), 10_000)
+        .reason,
+    ).toBe("handoff");
+
+    expect(completeRelayHandoff(room, firstTeam.id, 13_999)).toBe(false);
+    expect(completeRelayHandoff(room, firstTeam.id, 14_000)).toBe(true);
+    expect(firstTeam.relay).toMatchObject({
+      activeRunnerIndex: 1,
+      status: "running",
+      handoffEndsAt: null,
+      legStartBeat: 5,
+      legFinishBeat: 10,
+    });
+    expect(firstTeam.ready).toBe(false);
+    expect(firstTeam.bpm).toBeNull();
+    expect(firstTeam.signalQuality).toBe(0);
+
+    const nextRunnerBeat = acceptBeat(
+      room,
+      firstTeam.id,
+      beat(6, { detectedAt: 14_600, bpm: 91 }),
+      14_600,
+    );
+    expect(nextRunnerBeat.accepted).toBe(true);
+    expect(nextRunnerBeat.event?.relay?.runnerIndex).toBe(1);
+    expect(nextRunnerBeat.beatCount).toBe(6);
+  });
+
+  it("마지막 주자는 바톤 전환 없이 팀의 완주 순위를 확정한다", () => {
+    const { room, firstTeam } = setupRelayRace(10);
+    for (let sequence = 1; sequence <= 5; sequence += 1) {
+      acceptBeat(room, firstTeam.id, beat(sequence), 5_000 + sequence * 800);
+    }
+    completeRelayHandoff(room, firstTeam.id, 14_000);
+
+    let finish = acceptBeat(
+      room,
+      firstTeam.id,
+      beat(6, { detectedAt: 14_600 }),
+      14_600,
+    );
+    for (let sequence = 7; sequence <= 10; sequence += 1) {
+      const detectedAt = 14_600 + (sequence - 6) * 800;
+      finish = acceptBeat(
+        room,
+        firstTeam.id,
+        beat(sequence, { detectedAt }),
+        detectedAt,
+      );
+    }
+
+    expect(finish.handoffStarted).toBe(false);
+    expect(firstTeam.finishPlace).toBe(1);
+    expect(firstTeam.relay?.activeRunnerIndex).toBe(1);
+  });
+
   it("카메라 준비 뒤 3·2·1을 모두 표시하도록 5.2초로 설정한다", () => {
     const room = createRoomState({
       code: "COUNT",

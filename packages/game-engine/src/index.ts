@@ -1,11 +1,20 @@
 import {
+  DEFAULT_HANDOFF_DURATION_MS,
   DEFAULT_FINISH_BEATS,
+  MAX_RELAY_RUNNERS,
+  MAX_TEAM_COUNT,
   MAX_PLAYERS,
+  MIN_RELAY_RUNNERS,
+  MIN_TEAM_COUNT,
+  RELAY_RUNNER_COLORS,
   type AcceptedBeat,
   type BeatEvent,
   type BeatRejectReason,
   type MeasurementUpdate,
+  type PlayerRelaySnapshot,
   type PlayerSnapshot,
+  type RaceMode,
+  type RelayRoomSettings,
   type RoomPhase,
   type RoomSnapshot,
 } from "@heartrace/protocol";
@@ -29,6 +38,8 @@ export interface PlayerState extends PlayerSnapshot {
 export interface RoomState {
   code: string;
   phase: RoomPhase;
+  mode: RaceMode;
+  relaySettings: RelayRoomSettings | null;
   finishBeats: number;
   hostToken: string;
   hostSocketId: string | null;
@@ -45,6 +56,7 @@ export interface BeatAcceptance {
   event?: AcceptedBeat;
   beatCount: number;
   raceFinished: boolean;
+  handoffStarted: boolean;
 }
 
 export function createRoomState(input: {
@@ -52,15 +64,25 @@ export function createRoomState(input: {
   hostToken: string;
   hostSocketId: string;
   finishBeats?: number;
+  mode?: RaceMode;
+  relay?: {
+    teamCount: number;
+    runnersPerTeam: number;
+  };
 }): RoomState {
   const finishBeats = Math.min(
     300,
     Math.max(10, Math.round(input.finishBeats ?? DEFAULT_FINISH_BEATS)),
   );
+  const mode = input.mode ?? "individual";
+  const relaySettings =
+    mode === "relay" ? normalizeRelaySettings(input.relay) : null;
 
   return {
     code: input.code,
     phase: "lobby",
+    mode,
+    relaySettings,
     finishBeats,
     hostToken: input.hostToken,
     hostSocketId: input.hostSocketId,
@@ -79,13 +101,19 @@ export function addPlayer(
     token: string;
     socketId: string;
     nickname: string;
+    runnerNames?: string[];
   },
 ): PlayerState {
   if (room.phase !== "lobby") {
     throw new Error("경기가 진행 중인 방에는 새로 입장할 수 없습니다.");
   }
-  if (room.players.size >= MAX_PLAYERS) {
-    throw new Error(`한 방에는 최대 ${MAX_PLAYERS}명까지 입장할 수 있습니다.`);
+  const participantLimit = room.relaySettings?.teamCount ?? MAX_PLAYERS;
+  if (room.players.size >= participantLimit) {
+    throw new Error(
+      room.mode === "relay"
+        ? `이 방에는 ${participantLimit}팀이 모두 입장했습니다.`
+        : `한 방에는 최대 ${MAX_PLAYERS}명까지 입장할 수 있습니다.`,
+    );
   }
 
   const nickname = input.nickname.trim().slice(0, 12);
@@ -106,6 +134,7 @@ export function addPlayer(
     beatCount: 0,
     distanceRatio: 0,
     finishPlace: null,
+    relay: createPlayerRelay(room, input.runnerNames),
     lastSequence: -1,
     seenBeatIds: new Set(),
     lastAcceptedDetectedAt: null,
@@ -156,6 +185,14 @@ export function startCountdown(room: RoomState, now: number): number {
     throw new Error("대기 중인 방만 시작할 수 있습니다.");
   if (room.players.size < 1) throw new Error("참가자가 한 명 이상 필요합니다.");
   if (
+    room.relaySettings &&
+    room.players.size !== room.relaySettings.teamCount
+  ) {
+    throw new Error(
+      `${room.relaySettings.teamCount}팀이 모두 입장해야 경기를 시작할 수 있습니다.`,
+    );
+  }
+  if (
     [...room.players.values()].some(
       (player) => !player.connected || !player.ready,
     )
@@ -200,6 +237,15 @@ export function acceptBeat(
   if (!player) return rejected("unknown_player", 0);
   if (room.phase === "finished") return rejected("finished", player.beatCount);
   if (room.phase !== "racing") return rejected("not_racing", player.beatCount);
+  if (player.relay?.status === "handoff") {
+    if (
+      player.relay.handoffEndsAt === null ||
+      acceptedAt < player.relay.handoffEndsAt
+    ) {
+      return rejected("handoff", player.beatCount);
+    }
+    completeRelayHandoff(room, playerId, acceptedAt);
+  }
   if (player.seenBeatIds.has(beat.id))
     return rejected("duplicate", player.beatCount);
   if (
@@ -266,6 +312,18 @@ export function acceptBeat(
     player.finishPlace = room.nextFinishPlace++;
   }
 
+  let handoffStarted = false;
+  if (
+    player.finishPlace === null &&
+    player.relay &&
+    player.beatCount >= player.relay.legFinishBeat
+  ) {
+    player.relay.status = "handoff";
+    player.relay.handoffEndsAt =
+      acceptedAt + (room.relaySettings?.handoffDurationMs ?? 0);
+    handoffStarted = true;
+  }
+
   const event: AcceptedBeat = {
     playerId,
     beatId: beat.id,
@@ -276,6 +334,12 @@ export function acceptBeat(
     accent: player.beatCount % 3 === 0,
     acceptedAt,
     source: beat.source,
+    relay: player.relay
+      ? {
+          runnerIndex: player.relay.activeRunnerIndex,
+          handoffEndsAt: player.relay.handoffEndsAt,
+        }
+      : null,
   };
 
   const connectedPlayers = [...room.players.values()].filter(
@@ -290,7 +354,54 @@ export function acceptBeat(
     room.finishedAt = acceptedAt;
   }
 
-  return { accepted: true, event, beatCount: player.beatCount, raceFinished };
+  return {
+    accepted: true,
+    event,
+    beatCount: player.beatCount,
+    raceFinished,
+    handoffStarted,
+  };
+}
+
+export function completeRelayHandoff(
+  room: RoomState,
+  playerId: string,
+  now: number,
+): boolean {
+  const player = room.players.get(playerId);
+  const relay = player?.relay;
+  if (
+    !player ||
+    !relay ||
+    relay.status !== "handoff" ||
+    relay.handoffEndsAt === null ||
+    now < relay.handoffEndsAt
+  ) {
+    return false;
+  }
+
+  relay.activeRunnerIndex = Math.min(
+    relay.runners.length - 1,
+    relay.activeRunnerIndex + 1,
+  );
+  relay.status = "running";
+  relay.handoffEndsAt = null;
+  relay.legStartBeat = player.beatCount;
+  relay.legFinishBeat = relayBoundary(
+    room.finishBeats,
+    relay.runners.length,
+    relay.activeRunnerIndex + 1,
+  );
+
+  // 한 휴대폰을 다음 사람에게 넘겨도 참가 세션과 전체 거리는 유지하지만,
+  // 이전 사람의 cadence/BPM을 다음 주자에게 물려주지는 않습니다.
+  player.measurementState = "measuring";
+  player.ready = false;
+  player.bpm = null;
+  player.signalQuality = 0;
+  player.lastAcceptedDetectedAt = null;
+  player.bridgedSinceObserved = 0;
+  return true;
 }
 
 export function toSnapshot(room: RoomState): RoomSnapshot {
@@ -306,6 +417,12 @@ export function toSnapshot(room: RoomState): RoomSnapshot {
       beatCount: player.beatCount,
       distanceRatio: player.distanceRatio,
       finishPlace: player.finishPlace,
+      relay: player.relay
+        ? {
+            ...player.relay,
+            runners: player.relay.runners.map((runner) => ({ ...runner })),
+          }
+        : null,
     }))
     .sort((a, b) => {
       if (a.finishPlace !== null && b.finishPlace !== null) {
@@ -319,6 +436,8 @@ export function toSnapshot(room: RoomState): RoomSnapshot {
   return {
     code: room.code,
     phase: room.phase,
+    mode: room.mode,
+    relaySettings: room.relaySettings ? { ...room.relaySettings } : null,
     serverNow: Date.now(),
     finishBeats: room.finishBeats,
     hostConnected: room.hostSocketId !== null,
@@ -339,7 +458,89 @@ function resetRaceProgress(room: RoomState): void {
     player.seenBeatIds.clear();
     player.lastAcceptedDetectedAt = null;
     player.bridgedSinceObserved = 0;
+    if (player.relay) {
+      player.relay.activeRunnerIndex = 0;
+      player.relay.status = "running";
+      player.relay.handoffEndsAt = null;
+      player.relay.legStartBeat = 0;
+      player.relay.legFinishBeat = relayBoundary(
+        room.finishBeats,
+        player.relay.runners.length,
+        1,
+      );
+    }
   }
+}
+
+function normalizeRelaySettings(
+  input:
+    | {
+        teamCount: number;
+        runnersPerTeam: number;
+      }
+    | undefined,
+): RelayRoomSettings {
+  if (!input) throw new Error("팀전 설정을 확인해 주세요.");
+  const teamCount = Math.round(input.teamCount);
+  const runnersPerTeam = Math.round(input.runnersPerTeam);
+  if (
+    !Number.isInteger(teamCount) ||
+    teamCount < MIN_TEAM_COUNT ||
+    teamCount > MAX_TEAM_COUNT
+  ) {
+    throw new Error(
+      `팀 수는 ${MIN_TEAM_COUNT}~${MAX_TEAM_COUNT}팀이어야 합니다.`,
+    );
+  }
+  if (
+    !Number.isInteger(runnersPerTeam) ||
+    runnersPerTeam < MIN_RELAY_RUNNERS ||
+    runnersPerTeam > MAX_RELAY_RUNNERS
+  ) {
+    throw new Error(
+      `팀별 주자는 ${MIN_RELAY_RUNNERS}~${MAX_RELAY_RUNNERS}명이어야 합니다.`,
+    );
+  }
+  return {
+    teamCount,
+    runnersPerTeam,
+    handoffDurationMs: DEFAULT_HANDOFF_DURATION_MS,
+  };
+}
+
+function createPlayerRelay(
+  room: RoomState,
+  runnerNames: string[] | undefined,
+): PlayerRelaySnapshot | null {
+  const settings = room.relaySettings;
+  if (!settings) return null;
+  const runners = Array.from(
+    { length: settings.runnersPerTeam },
+    (_, index) => {
+      const suppliedName = runnerNames?.[index]?.trim().slice(0, 12);
+      return {
+        index,
+        name: suppliedName || `${index + 1}번 주자`,
+        color: RELAY_RUNNER_COLORS[index] ?? RELAY_RUNNER_COLORS[0],
+      };
+    },
+  );
+  return {
+    runners,
+    activeRunnerIndex: 0,
+    status: "running",
+    handoffEndsAt: null,
+    legStartBeat: 0,
+    legFinishBeat: relayBoundary(room.finishBeats, runners.length, 1),
+  };
+}
+
+function relayBoundary(
+  finishBeats: number,
+  runnerCount: number,
+  completedRunnerCount: number,
+): number {
+  return Math.round((finishBeats * completedRunnerCount) / runnerCount);
 }
 
 function clamp01(value: number): number {
@@ -347,5 +548,11 @@ function clamp01(value: number): number {
 }
 
 function rejected(reason: BeatRejectReason, beatCount: number): BeatAcceptance {
-  return { accepted: false, reason, beatCount, raceFinished: false };
+  return {
+    accepted: false,
+    reason,
+    beatCount,
+    raceFinished: false,
+    handoffStarted: false,
+  };
 }

@@ -4,6 +4,7 @@ import { io, type Socket } from "socket.io-client";
 import type {
   AcceptedBeat,
   ClientToServerEvents,
+  HostCreateRoomRequest,
   RoomSnapshot,
   ServerToClientEvents,
 } from "@heartrace/protocol";
@@ -81,7 +82,7 @@ function HostApp() {
     };
   }, []);
 
-  const createRoom = useCallback(() => {
+  const createRoom = useCallback((request: HostCreateRoomRequest) => {
     const socket = socketRef.current;
     if (!socket?.connected) {
       setError("서버와 연결 중입니다. 잠시 후 다시 눌러 주세요.");
@@ -89,7 +90,7 @@ function HostApp() {
     }
     setBusy(true);
     setError(null);
-    socket.emit("host:create-room", { finishBeats: 60 }, (result) => {
+    socket.emit("host:create-room", request, (result) => {
       setBusy(false);
       if (!result.ok) return setError(result.error);
       const nextSession = {
@@ -494,8 +495,20 @@ function Home({
   connected: boolean;
   busy: boolean;
   error: string | null;
-  onCreate: () => void;
+  onCreate: (request: HostCreateRoomRequest) => void;
 }) {
+  const [mode, setMode] = useState<"individual" | "relay">("individual");
+  const [teamCount, setTeamCount] = useState(2);
+  const [runnersPerTeam, setRunnersPerTeam] = useState(3);
+  const createRequest: HostCreateRoomRequest =
+    mode === "relay"
+      ? {
+          finishBeats: 60,
+          mode,
+          relay: { teamCount, runnersPerTeam },
+        }
+      : { finishBeats: 60, mode };
+
   return (
     <main className="home page-enter">
       <div className="home-kicker">
@@ -515,9 +528,47 @@ function Home({
         </p>
       </div>
       <div className="home-action">
+        <div className="race-setup" aria-label="경기 방식 설정">
+          <div className="mode-picker" role="group" aria-label="경기 방식">
+            <button
+              type="button"
+              className={mode === "individual" ? "is-selected" : ""}
+              onClick={() => setMode("individual")}
+            >
+              개인전
+            </button>
+            <button
+              type="button"
+              className={mode === "relay" ? "is-selected" : ""}
+              onClick={() => setMode("relay")}
+            >
+              팀 이어달리기
+            </button>
+          </div>
+          {mode === "relay" && (
+            <div className="relay-options">
+              <NumberPicker
+                label="팀 수"
+                value={teamCount}
+                min={2}
+                max={4}
+                suffix="팀"
+                onChange={setTeamCount}
+              />
+              <NumberPicker
+                label="팀별 주자"
+                value={runnersPerTeam}
+                min={2}
+                max={6}
+                suffix="명"
+                onChange={setRunnersPerTeam}
+              />
+            </div>
+          )}
+        </div>
         <button
           className="primary-button hero-button"
-          onClick={onCreate}
+          onClick={() => onCreate(createRequest)}
           disabled={busy}
         >
           {busy ? "경기장 만드는 중…" : "새 경기 만들기"}
@@ -531,6 +582,50 @@ function Home({
       </div>
       <p className="edition">전시용 프로토타입 · 2026</p>
     </main>
+  );
+}
+
+function NumberPicker({
+  label,
+  value,
+  min,
+  max,
+  suffix,
+  onChange,
+}: {
+  label: string;
+  value: number;
+  min: number;
+  max: number;
+  suffix: string;
+  onChange: (value: number) => void;
+}) {
+  return (
+    <div className="number-picker">
+      <span>{label}</span>
+      <div>
+        <button
+          type="button"
+          aria-label={`${label} 줄이기`}
+          disabled={value <= min}
+          onClick={() => onChange(Math.max(min, value - 1))}
+        >
+          −
+        </button>
+        <strong>
+          {value}
+          {suffix}
+        </strong>
+        <button
+          type="button"
+          aria-label={`${label} 늘리기`}
+          disabled={value >= max}
+          onClick={() => onChange(Math.min(max, value + 1))}
+        >
+          +
+        </button>
+      </div>
+    </div>
   );
 }
 
@@ -617,11 +712,15 @@ function Lobby({
   readOnly?: boolean;
 }) {
   const [openMenuPlayerId, setOpenMenuPlayerId] = useState<string | null>(null);
+  const isRelay = room.mode === "relay" && room.relaySettings !== null;
+  const expectedParticipants = room.relaySettings?.teamCount;
   const readyCount = room.players.filter(
     (player) => player.connected && player.ready,
   ).length;
   const allReady =
     room.players.length > 0 &&
+    (expectedParticipants === undefined ||
+      room.players.length === expectedParticipants) &&
     room.players.every((player) => player.connected && player.ready);
   const joinUrl = new URL("/join", PUBLIC_URL);
   joinUrl.searchParams.set("room", room.code);
@@ -631,7 +730,11 @@ function Lobby({
     <section className="lobby page-enter">
       <div className="join-panel">
         <div>
-          <p className="eyebrow">휴대폰에서 방 코드를 입력하세요</p>
+          <p className="eyebrow">
+            {isRelay
+              ? "각 팀의 대표 휴대폰에서 방 코드를 입력하세요"
+              : "휴대폰에서 방 코드를 입력하세요"}
+          </p>
           <p
             className="room-code"
             aria-label={`방 코드 ${room.code.split("").join(" ")}`}
@@ -639,7 +742,8 @@ function Lobby({
             {room.code}
           </p>
           <p className="join-help">
-            심장 달리기 앱을 열고 닉네임과 코드를 입력하세요.
+            심장 달리기 앱을 열고 {isRelay ? "팀 이름" : "닉네임"}과 코드를
+            입력하세요.
           </p>
         </div>
         <div className="qr-frame" aria-label="앱 입장 QR 코드">
@@ -656,10 +760,10 @@ function Lobby({
       <div className="players-section">
         <div className="section-heading">
           <div>
-            <p className="eyebrow">참가자</p>
+            <p className="eyebrow">{isRelay ? "참가 팀" : "참가자"}</p>
             <h2>
               {room.players.length > 0
-                ? `${readyCount} / ${room.players.length} 준비 완료`
+                ? `${readyCount} / ${expectedParticipants ?? room.players.length} 준비 완료`
                 : "입장을 기다리는 중"}
             </h2>
           </div>
@@ -697,6 +801,16 @@ function Lobby({
                         ? `${player.bpm} BPM · ${measurementLabel(player.measurementState)}`
                         : measurementLabel(player.measurementState)}
                 </p>
+                {player.relay && (
+                  <div className="runner-lineup" aria-label="주자 순서">
+                    {player.relay.runners.map((runner) => (
+                      <span key={runner.index}>
+                        <i style={{ background: runner.color }} />
+                        {runner.name}
+                      </span>
+                    ))}
+                  </div>
+                )}
               </div>
               {!readOnly && (
                 <div
@@ -758,9 +872,15 @@ function Lobby({
         <div className="rule-copy">
           <HeartOutline />
           <p>
-            <strong>한 번의 박동 = 한 걸음</strong>
+            <strong>
+              {isRelay
+                ? `한 팀 ${room.relaySettings?.runnersPerTeam}명 · 바톤 전환 5초`
+                : "한 번의 박동 = 한 걸음"}
+            </strong>
             <br />
-            먼저 {room.finishBeats}번 뛰는 심장이 우승합니다.
+            {isRelay
+              ? `주자마다 ${room.finishBeats / (room.relaySettings?.runnersPerTeam ?? 1)}박동씩 이어 달립니다.`
+              : `먼저 ${room.finishBeats}번 뛰는 심장이 우승합니다.`}
           </p>
         </div>
         {readOnly ? (
@@ -875,18 +995,49 @@ function Race({
         {room.players.map((player, index) => {
           const beat = beatEffects[player.id];
           const effectKey = beat?.beatId ?? "initial";
+          const relay = player.relay;
+          const activeRunner = relay?.runners[relay.activeRunnerIndex];
+          const nextRunner = relay?.runners[relay.activeRunnerIndex + 1];
           return (
-            <article className="track" key={player.id}>
+            <article
+              className={`track ${relay ? "is-relay" : ""} ${relay?.status === "handoff" ? "is-handoff" : ""}`}
+              key={player.id}
+            >
               <div className="track-meta">
                 <span className="lane-number">{index + 1}</span>
                 <div>
                   <h2>{player.nickname}</h2>
                   <p>
-                    <strong>{player.bpm ?? "—"}</strong> BPM
+                    {relay?.status === "handoff" ? (
+                      <>
+                        <strong>바톤 전달 중</strong>
+                        {nextRunner ? ` · 다음 ${nextRunner.name}` : ""}
+                      </>
+                    ) : (
+                      <>
+                        {activeRunner && `${activeRunner.name} · `}
+                        <strong>{player.bpm ?? "—"}</strong> BPM
+                      </>
+                    )}
                   </p>
                 </div>
               </div>
               <div className="track-rail">
+                {relay && (
+                  <div className="relay-track-segments" aria-hidden="true">
+                    {relay.runners.map((runner) => (
+                      <span
+                        key={runner.index}
+                        style={{
+                          backgroundColor: `${runner.color}24`,
+                          borderColor: `${runner.color}66`,
+                        }}
+                      >
+                        <i style={{ backgroundColor: runner.color }} />
+                      </span>
+                    ))}
+                  </div>
+                )}
                 <div className="track-marks" aria-hidden="true" />
                 <div
                   className="track-progress"
@@ -894,7 +1045,14 @@ function Race({
                 />
                 <div
                   className={`racer ${beat?.accent ? "is-accent" : ""}`}
-                  style={{ left: `${player.distanceRatio * 100}%` }}
+                  style={{
+                    left: `${player.distanceRatio * 100}%`,
+                    ...(activeRunner
+                      ? ({
+                          "--runner-color": activeRunner.color,
+                        } as React.CSSProperties)
+                      : {}),
+                  }}
                   key={effectKey}
                 >
                   <span className="racer-pulse" />
@@ -967,9 +1125,17 @@ function Finish({
         <h1>
           {winner?.nickname}
           <br />
-          심장이 먼저 도착했습니다.
+          {room.mode === "relay"
+            ? "팀이 바톤을 먼저 연결했습니다."
+            : "심장이 먼저 도착했습니다."}
         </h1>
-        <p>{winner?.beatCount ?? room.finishBeats}번의 박동으로 완주</p>
+        <p>
+          {winner?.beatCount ?? room.finishBeats}번의 박동
+          {room.mode === "relay" && winner?.relay
+            ? ` · ${winner.relay.runners.length}명의 주자`
+            : ""}
+          으로 완주
+        </p>
       </div>
       <ol className="ranking-list">
         {room.players.map((player, index) => (

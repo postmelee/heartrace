@@ -17,6 +17,7 @@
     "test": "vitest run",
     "test:watch": "vitest",
     "smoke": "tsx scripts/smoke-race.ts",
+    "smoke:relay": "tsx scripts/smoke-relay.ts",
     "benchmark:ppg:but": "tsx scripts/benchmark-butppg.ts",
     "analyze:ppg:trace": "tsx scripts/analyze-ppg-trace.ts",
     "format": "prettier --write .",

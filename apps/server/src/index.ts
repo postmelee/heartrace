@@ -8,6 +8,7 @@ import {
   acceptBeat,
   addPlayer,
   beginRace,
+  completeRelayHandoff,
   createRoomState,
   removePlayer,
   resetRoom,
@@ -67,6 +68,7 @@ const io = new Server<
 
 const rooms = new Map<string, RoomState>();
 const countdownTimers = new Map<string, NodeJS.Timeout>();
+const relayHandoffTimers = new Map<string, NodeJS.Timeout>();
 const playerCleanupTimers = new Map<string, NodeJS.Timeout>();
 const PLAYER_DISCONNECT_GRACE_MS = 15_000;
 
@@ -93,6 +95,8 @@ io.on("connection", (socket) => {
         ...(request.finishBeats === undefined
           ? {}
           : { finishBeats: request.finishBeats }),
+        ...(request.mode === undefined ? {} : { mode: request.mode }),
+        ...(request.relay === undefined ? {} : { relay: request.relay }),
       });
       rooms.set(code, room);
       attachSocket(socket, code, "host");
@@ -154,6 +158,9 @@ io.on("connection", (socket) => {
         token: createToken(),
         socketId: socket.id,
         nickname: request.nickname,
+        ...(request.runnerNames === undefined
+          ? {}
+          : { runnerNames: request.runnerNames }),
       });
       attachSocket(socket, room.code, "player", player.id);
       emitSnapshot(room);
@@ -180,6 +187,7 @@ io.on("connection", (socket) => {
     if (!context) return ack({ ok: true, data: { left: true } });
 
     clearPlayerCleanup(context.room.code, context.player.id);
+    clearRelayHandoff(context.room.code, context.player.id);
     // 명시적인 나가기는 네트워크 단절과 달리 재연결을 기다리지 않습니다.
     // 경기 중이어도 즉시 제거해 앱과 호스트 양쪽에 이전 참가자가 남지 않게 합니다.
     removePlayer(context.room, context.player.id);
@@ -195,6 +203,7 @@ io.on("connection", (socket) => {
       emitSnapshot(room);
 
       clearCountdown(room.code);
+      clearRoomRelayHandoffs(room.code);
       countdownTimers.set(
         room.code,
         setTimeout(
@@ -216,6 +225,7 @@ io.on("connection", (socket) => {
     try {
       const room = getHostRoom(request.roomCode, request.hostToken);
       clearCountdown(room.code);
+      clearRoomRelayHandoffs(room.code);
       removeDisconnectedPlayers(room);
       resetRoom(room);
       emitSnapshot(room);
@@ -235,6 +245,7 @@ io.on("connection", (socket) => {
       if (!player) throw new Error("이미 나간 참가자입니다.");
 
       clearPlayerCleanup(room.code, player.id);
+      clearRelayHandoff(room.code, player.id);
       const playerSocket = player.socketId
         ? io.sockets.sockets.get(player.socketId)
         : undefined;
@@ -275,6 +286,9 @@ io.on("connection", (socket) => {
     if (!result.accepted || !result.event) return;
     io.to(context.room.code).emit("race:beat", result.event);
     emitSnapshot(context.room);
+    if (result.handoffStarted) {
+      scheduleRelayHandoff(context.room, context.player.id);
+    }
     if (result.raceFinished) {
       io.to(context.room.code).emit("race:finished", toSnapshot(context.room));
     }
@@ -347,6 +361,43 @@ function clearCountdown(code: string): void {
   const timer = countdownTimers.get(code);
   if (timer) clearTimeout(timer);
   countdownTimers.delete(code);
+}
+
+function scheduleRelayHandoff(room: RoomState, playerId: string): void {
+  const player = room.players.get(playerId);
+  const handoffEndsAt = player?.relay?.handoffEndsAt;
+  if (!player || handoffEndsAt === null || handoffEndsAt === undefined) return;
+  clearRelayHandoff(room.code, playerId);
+  const key = relayHandoffKey(room.code, playerId);
+  const timer = setTimeout(
+    () => {
+      relayHandoffTimers.delete(key);
+      if (completeRelayHandoff(room, playerId, Date.now())) emitSnapshot(room);
+    },
+    Math.max(0, handoffEndsAt - Date.now()),
+  );
+  timer.unref();
+  relayHandoffTimers.set(key, timer);
+}
+
+function clearRelayHandoff(roomCode: string, playerId: string): void {
+  const key = relayHandoffKey(roomCode, playerId);
+  const timer = relayHandoffTimers.get(key);
+  if (timer) clearTimeout(timer);
+  relayHandoffTimers.delete(key);
+}
+
+function clearRoomRelayHandoffs(roomCode: string): void {
+  for (const key of [...relayHandoffTimers.keys()]) {
+    if (!key.startsWith(`${roomCode}:`)) continue;
+    const timer = relayHandoffTimers.get(key);
+    if (timer) clearTimeout(timer);
+    relayHandoffTimers.delete(key);
+  }
+}
+
+function relayHandoffKey(roomCode: string, playerId: string): string {
+  return `${roomCode}:${playerId}`;
 }
 
 function schedulePlayerCleanup(roomCode: string, playerId: string): void {

@@ -107,8 +107,78 @@ button {
 }
 .home-action {
   display: flex;
-  align-items: center;
+  align-items: flex-end;
   gap: 20px;
+  flex-wrap: wrap;
+}
+.race-setup {
+  display: flex;
+  align-items: flex-end;
+  gap: 14px;
+  flex-wrap: wrap;
+}
+.mode-picker {
+  min-height: 52px;
+  padding: 4px;
+  border: 1px solid var(--line);
+  border-radius: 16px;
+  display: flex;
+  background: var(--faint);
+}
+.mode-picker button {
+  min-width: 104px;
+  padding: 0 16px;
+  border: 0;
+  border-radius: 11px;
+  background: transparent;
+  color: #777;
+  font-weight: 700;
+  cursor: pointer;
+}
+.mode-picker button.is-selected {
+  background: #fff;
+  color: var(--ink);
+  box-shadow: 0 2px 8px rgb(0 0 0 / 8%);
+}
+.relay-options {
+  display: flex;
+  gap: 8px;
+}
+.number-picker {
+  min-width: 154px;
+}
+.number-picker > span {
+  display: block;
+  margin: 0 0 6px 4px;
+  color: #777;
+  font-size: 11px;
+  font-weight: 700;
+}
+.number-picker > div {
+  min-height: 52px;
+  padding: 4px;
+  border: 1px solid var(--line);
+  border-radius: 16px;
+  display: grid;
+  grid-template-columns: 38px 1fr 38px;
+  align-items: center;
+}
+.number-picker button {
+  width: 34px;
+  height: 34px;
+  border: 0;
+  border-radius: 10px;
+  background: var(--faint);
+  font-size: 18px;
+  cursor: pointer;
+}
+.number-picker button:disabled {
+  opacity: 0.25;
+  cursor: not-allowed;
+}
+.number-picker strong {
+  text-align: center;
+  font-size: 14px;
 }
 .edition {
   justify-self: end;
@@ -529,6 +599,28 @@ button {
 .player-card.is-ready p {
   color: #bdbdbd;
 }
+.runner-lineup {
+  margin-top: 10px;
+  display: flex;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+.runner-lineup span {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  color: #777;
+  font-size: 10px;
+  font-weight: 650;
+}
+.player-card.is-ready .runner-lineup span {
+  color: #cfcfca;
+}
+.runner-lineup i {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+}
 .player-actions {
   position: relative;
   flex: 0 0 auto;
@@ -849,6 +941,29 @@ button {
   height: 54px;
   margin-right: 18px;
 }
+.relay-track-segments {
+  position: absolute;
+  inset: 6px 0;
+  display: flex;
+  overflow: hidden;
+  border-radius: 12px;
+}
+.relay-track-segments span {
+  position: relative;
+  flex: 1;
+  border-right: 1px solid;
+}
+.relay-track-segments span:last-child {
+  border-right: 0;
+}
+.relay-track-segments i {
+  position: absolute;
+  top: 5px;
+  left: 6px;
+  width: 5px;
+  height: 5px;
+  border-radius: 50%;
+}
 .track-marks {
   position: absolute;
   left: 0;
@@ -876,12 +991,15 @@ button {
   height: 46px;
   transform: translate(-50%, -50%);
   border-radius: 50%;
-  background: var(--ink);
+  background: var(--runner-color, var(--ink));
   display: grid;
   place-items: center;
   transition: left 220ms var(--ease-out);
   animation: beat-arrive 220ms var(--ease-out);
   z-index: 2;
+}
+.track.is-handoff .racer {
+  animation: handoff-pulse 900ms ease-in-out infinite alternate;
 }
 .racer .heart-solid {
   width: 21px;
@@ -1106,6 +1224,17 @@ button {
   }
 }
 
+@keyframes handoff-pulse {
+  from {
+    transform: translate(-50%, -50%) scale(0.9);
+    opacity: 0.6;
+  }
+  to {
+    transform: translate(-50%, -50%) scale(1.06);
+    opacity: 1;
+  }
+}
+
 @media (max-width: 760px) {
   .desktop-only {
     display: none;
@@ -1118,6 +1247,14 @@ button {
   .join-panel {
     align-items: stretch;
     flex-direction: column;
+  }
+  .race-setup,
+  .relay-options {
+    width: 100%;
+  }
+  .mode-picker,
+  .number-picker {
+    flex: 1;
   }
   .edition {
     justify-self: start;

@@ -1,7 +1,22 @@
 export const DEFAULT_FINISH_BEATS = 60;
 export const MAX_PLAYERS = 8;
+export const MIN_TEAM_COUNT = 2;
+export const MAX_TEAM_COUNT = 4;
+export const MIN_RELAY_RUNNERS = 2;
+export const MAX_RELAY_RUNNERS = 6;
+export const DEFAULT_HANDOFF_DURATION_MS = 5_000;
+export const RELAY_RUNNER_COLORS = [
+  "#ff4d4f",
+  "#ffad0d",
+  "#22a06b",
+  "#377dff",
+  "#8b5cf6",
+  "#ec4899",
+] as const;
 
 export type RoomPhase = "lobby" | "countdown" | "racing" | "finished";
+export type RaceMode = "individual" | "relay";
+export type RelayStatus = "running" | "handoff";
 
 export type MeasurementState = "joined" | "measuring" | "ready" | "signal_lost";
 
@@ -12,9 +27,31 @@ export type BeatRejectReason =
   | "out_of_order"
   | "low_confidence"
   | "invalid_interval"
+  | "handoff"
   | "finished";
 
 export type BeatSource = "observed" | "bridged";
+
+export interface RelayRunnerSnapshot {
+  index: number;
+  name: string;
+  color: string;
+}
+
+export interface PlayerRelaySnapshot {
+  runners: RelayRunnerSnapshot[];
+  activeRunnerIndex: number;
+  status: RelayStatus;
+  handoffEndsAt: number | null;
+  legStartBeat: number;
+  legFinishBeat: number;
+}
+
+export interface RelayRoomSettings {
+  teamCount: number;
+  runnersPerTeam: number;
+  handoffDurationMs: number;
+}
 
 export interface PlayerSnapshot {
   id: string;
@@ -27,11 +64,14 @@ export interface PlayerSnapshot {
   beatCount: number;
   distanceRatio: number;
   finishPlace: number | null;
+  relay: PlayerRelaySnapshot | null;
 }
 
 export interface RoomSnapshot {
   code: string;
   phase: RoomPhase;
+  mode: RaceMode;
+  relaySettings: RelayRoomSettings | null;
   /** 이 스냅샷을 만든 서버의 Unix epoch(ms). 클라이언트 시계 오차 보정용 */
   serverNow: number;
   finishBeats: number;
@@ -77,6 +117,10 @@ export interface AcceptedBeat {
   accent: boolean;
   acceptedAt: number;
   source: BeatSource;
+  relay: {
+    runnerIndex: number;
+    handoffEndsAt: number | null;
+  } | null;
 }
 
 export type Ack<T> = (
@@ -85,6 +129,11 @@ export type Ack<T> = (
 
 export interface HostCreateRoomRequest {
   finishBeats?: number;
+  mode?: RaceMode;
+  relay?: {
+    teamCount: number;
+    runnersPerTeam: number;
+  };
 }
 
 export interface HostCreateRoomResponse {
@@ -95,6 +144,7 @@ export interface HostCreateRoomResponse {
 export interface PlayerJoinRequest {
   roomCode: string;
   nickname: string;
+  runnerNames?: string[];
   playerId?: string;
   playerToken?: string;
 }
