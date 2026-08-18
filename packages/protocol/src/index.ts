@@ -1,7 +1,7 @@
 export const DEFAULT_FINISH_BEATS = 60;
 export const MAX_PLAYERS = 8;
 export const MIN_TEAM_COUNT = 2;
-export const MAX_TEAM_COUNT = 4;
+export const MAX_TEAM_COUNT = 6;
 export const MIN_RELAY_RUNNERS = 2;
 export const MAX_RELAY_RUNNERS = 30;
 export const DEFAULT_HANDOFF_DURATION_MS = 5_000;

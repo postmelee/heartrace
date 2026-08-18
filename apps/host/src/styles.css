@@ -1273,6 +1273,16 @@ button {
   white-space: nowrap;
   box-shadow: 0 2px 8px rgb(0 0 0 / 10%);
 }
+.stadium-racer.is-packed {
+  width: 36px;
+  height: 36px;
+}
+.stadium-racer.is-packed .heart-solid {
+  width: 16px;
+}
+.stadium-racer.is-packed > strong {
+  display: none;
+}
 .stadium-racer.is-accent .racer-pulse {
   border-width: 2px;
   animation: accent-ring 620ms var(--ease-out) both;
@@ -1309,7 +1319,7 @@ button {
   width: min(100%, 1080px);
   margin: 0 auto;
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(190px, 1fr));
+  grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
   gap: 8px;
 }
 .stadium-team-card {

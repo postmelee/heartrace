@@ -95,7 +95,16 @@ describe("심박 경주 규칙", () => {
         mode: "relay",
         relay: { teamCount: 1, runnersPerTeam: 3, legBeats: 20 },
       }),
-    ).toThrow("팀 수는 2~4팀이어야 합니다.");
+    ).toThrow("팀 수는 2~6팀이어야 합니다.");
+    expect(() =>
+      createRoomState({
+        code: "BAD4",
+        hostToken: "host-token",
+        hostSocketId: "host-socket",
+        mode: "relay",
+        relay: { teamCount: 7, runnersPerTeam: 3, legBeats: 20 },
+      }),
+    ).toThrow("팀 수는 2~6팀이어야 합니다.");
     expect(() =>
       createRoomState({
         code: "BAD2",
@@ -114,6 +123,19 @@ describe("심박 경주 규칙", () => {
         relay: { teamCount: 2, runnersPerTeam: 3, legBeats: 15 },
       }),
     ).toThrow("주자당 박동은 10·20·30·60 중에서 선택해 주세요.");
+  });
+
+  it("팀전은 최대 여섯 팀까지 생성할 수 있다", () => {
+    const room = createRoomState({
+      code: "SIXTM",
+      hostToken: "host-token",
+      hostSocketId: "host-socket",
+      mode: "relay",
+      trackMode: "circular",
+      relay: { teamCount: 6, runnersPerTeam: 2, legBeats: 10 },
+    });
+
+    expect(room.relaySettings?.teamCount).toBe(6);
   });
 
   it("팀전 방에 트랙과 주자당 박동 수를 저장한다", () => {

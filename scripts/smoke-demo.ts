@@ -24,7 +24,10 @@ async function main(): Promise<void> {
   try {
     const created = await createDemoRoom(host);
     assert(created.room.demo, "모의 경기 방으로 표시되어야 합니다.");
-    assert(created.room.players.length === 2, "두 가상 팀이 입장해야 합니다.");
+    assert(
+      created.room.players.length === 6,
+      "여섯 가상 팀이 입장해야 합니다.",
+    );
     assert(
       created.room.players.every(
         (player) => player.connected && player.ready && player.relay,
@@ -83,7 +86,7 @@ function createDemoRoom(host: GameSocket): Promise<HostCreateRoomResponse> {
         mode: "relay",
         trackMode: "circular",
         demo: true,
-        relay: { teamCount: 2, runnersPerTeam: 2, legBeats: 10 },
+        relay: { teamCount: 6, runnersPerTeam: 2, legBeats: 10 },
       },
       (result) => {
         if (result.ok) resolve(result.data);

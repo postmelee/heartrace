@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { QRCodeSVG } from "qrcode.react";
 import { io, type Socket } from "socket.io-client";
+import { MAX_TEAM_COUNT } from "@heartrace/protocol";
 import type {
   AcceptedBeat,
   ClientToServerEvents,
@@ -596,7 +597,7 @@ function Home({
                 label="팀 수"
                 value={teamCount}
                 min={2}
-                max={4}
+                max={MAX_TEAM_COUNT}
                 suffix="팀"
                 onChange={setTeamCount}
               />
@@ -1334,21 +1335,21 @@ function StadiumRace({
         </svg>
 
         {entries.map(({ player, relay, rankingIndex, teamColor, progress }) => {
-          const closeEntries = entries.filter(
-            (candidate) =>
-              circularProgressDistance(candidate.progress, progress) < 0.04,
+          const collisionSlot = stadiumCollisionSlot(
+            entries,
+            player.id,
+            progress,
           );
-          const collisionIndex = closeEntries.findIndex(
-            (candidate) => candidate.player.id === player.id,
+          const position = stadiumPoint(
+            progress,
+            collisionSlot.normalOffset,
+            collisionSlot.tangentOffset,
           );
-          const collisionOffset =
-            (collisionIndex - (closeEntries.length - 1) / 2) * 24;
-          const position = stadiumPoint(progress, collisionOffset);
           const activeRunner = relay.runners[relay.activeRunnerIndex];
           const beat = beatEffects[player.id];
           return (
             <div
-              className={`stadium-racer ${beat?.accent ? "is-accent" : ""} ${relay.status === "handoff" ? "is-handoff" : ""}`}
+              className={`stadium-racer ${beat?.accent ? "is-accent" : ""} ${relay.status === "handoff" ? "is-handoff" : ""} ${collisionSlot.collisionCount >= 5 ? "is-packed" : ""}`}
               style={
                 {
                   left: position.left,
@@ -1371,16 +1372,16 @@ function StadiumRace({
         {entries.map(({ player, relay, progress, rankingIndex, teamColor }) => {
           const nextRunner = relay.runners[relay.activeRunnerIndex + 1];
           if (relay.status !== "handoff" || !nextRunner) return null;
-          const closeEntries = entries.filter(
-            (candidate) =>
-              circularProgressDistance(candidate.progress, progress) < 0.04,
+          const collisionSlot = stadiumCollisionSlot(
+            entries,
+            player.id,
+            progress,
           );
-          const collisionIndex = closeEntries.findIndex(
-            (candidate) => candidate.player.id === player.id,
+          const position = stadiumPoint(
+            progress,
+            collisionSlot.normalOffset,
+            collisionSlot.tangentOffset - 24,
           );
-          const collisionOffset =
-            (collisionIndex - (closeEntries.length - 1) / 2) * 24 - 22;
-          const position = stadiumPoint(progress, collisionOffset);
           return (
             <div
               className="stadium-racer stadium-next-racer"
@@ -1455,7 +1456,22 @@ function StadiumRace({
 }
 
 const STADIUM_CENTER_PATH = stadiumPath(235, 765, 165);
-const STADIUM_TEAM_COLORS = ["#d93e68", "#216fd1", "#ef7f24", "#219b69"];
+const STADIUM_TEAM_COLORS = [
+  "#d93e68",
+  "#216fd1",
+  "#ef7f24",
+  "#219b69",
+  "#7656d6",
+  "#087f8c",
+];
+const STADIUM_PACK_SLOTS = [
+  { tangentOffset: 30, normalOffset: 0 },
+  { tangentOffset: 10, normalOffset: -22 },
+  { tangentOffset: 10, normalOffset: 22 },
+  { tangentOffset: -10, normalOffset: -22 },
+  { tangentOffset: -10, normalOffset: 22 },
+  { tangentOffset: -30, normalOffset: 0 },
+];
 
 function stadiumPath(leftCenter: number, rightCenter: number, radius: number) {
   const top = 260 - radius;
@@ -1469,7 +1485,11 @@ function stadiumRelayProgress(
   return relay.legDistanceRatio;
 }
 
-function stadiumPoint(progress: number, offset: number) {
+function stadiumPoint(
+  progress: number,
+  normalOffset: number,
+  tangentOffset = 0,
+) {
   const leftCenter = 235;
   const rightCenter = 765;
   const centerY = 260;
@@ -1518,11 +1538,48 @@ function stadiumPoint(progress: number, offset: number) {
   const tangentX = ahead.x - point.x;
   const tangentY = ahead.y - point.y;
   const tangentLength = Math.hypot(tangentX, tangentY) || 1;
-  const x = point.x + (-tangentY / tangentLength) * offset;
-  const y = point.y + (tangentX / tangentLength) * offset;
+  const x =
+    point.x +
+    (-tangentY / tangentLength) * normalOffset +
+    (tangentX / tangentLength) * tangentOffset;
+  const y =
+    point.y +
+    (tangentX / tangentLength) * normalOffset +
+    (tangentY / tangentLength) * tangentOffset;
   return {
     left: `${(x / 1000) * 100}%`,
     top: `${(y / 520) * 100}%`,
+  };
+}
+
+function stadiumCollisionSlot<
+  T extends { player: { id: string }; progress: number },
+>(entries: T[], playerId: string, progress: number) {
+  const closeEntries = entries.filter(
+    (candidate) =>
+      circularProgressDistance(candidate.progress, progress) < 0.04,
+  );
+  if (closeEntries.length <= 1) {
+    return { tangentOffset: 0, normalOffset: 0, collisionCount: 1 };
+  }
+
+  const collisionIndex = closeEntries.findIndex(
+    (candidate) => candidate.player.id === playerId,
+  );
+  const activeSlots = STADIUM_PACK_SLOTS.slice(0, closeEntries.length);
+  const center = activeSlots.reduce(
+    (sum, slot) => ({
+      tangentOffset: sum.tangentOffset + slot.tangentOffset,
+      normalOffset: sum.normalOffset + slot.normalOffset,
+    }),
+    { tangentOffset: 0, normalOffset: 0 },
+  );
+  const slot = activeSlots[Math.max(0, collisionIndex)]!;
+  return {
+    tangentOffset:
+      slot.tangentOffset - center.tangentOffset / activeSlots.length,
+    normalOffset: slot.normalOffset - center.normalOffset / activeSlots.length,
+    collisionCount: closeEntries.length,
   };
 }
 
