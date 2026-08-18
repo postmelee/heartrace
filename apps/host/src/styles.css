@@ -107,8 +107,149 @@ button {
 }
 .home-action {
   display: flex;
-  align-items: center;
+  align-items: flex-end;
   gap: 20px;
+  flex-wrap: wrap;
+}
+.demo-entry {
+  min-height: 46px;
+  padding: 0 16px;
+  border: 1px solid var(--line);
+  border-radius: 14px;
+  color: #555;
+  display: inline-flex;
+  align-items: center;
+  font-size: 13px;
+  font-weight: 700;
+  text-decoration: none;
+  transition:
+    border-color 160ms ease,
+    color 160ms ease,
+    transform 160ms var(--ease-out);
+}
+.demo-entry:hover,
+.demo-entry:focus-visible {
+  border-color: var(--ink);
+  color: var(--ink);
+  outline: none;
+  transform: translateY(-1px);
+}
+.race-setup {
+  display: flex;
+  align-items: flex-end;
+  gap: 14px;
+  flex-wrap: wrap;
+}
+.mode-picker {
+  min-height: 52px;
+  padding: 4px;
+  border: 1px solid var(--line);
+  border-radius: 16px;
+  display: flex;
+  background: var(--faint);
+}
+.mode-picker button {
+  min-width: 104px;
+  padding: 0 16px;
+  border: 0;
+  border-radius: 11px;
+  background: transparent;
+  color: #777;
+  font-weight: 700;
+  cursor: pointer;
+}
+.mode-picker button.is-selected {
+  background: #fff;
+  color: var(--ink);
+  box-shadow: 0 2px 8px rgb(0 0 0 / 8%);
+}
+.relay-options {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+.number-picker,
+.select-picker,
+.choice-picker {
+  min-width: 154px;
+}
+.number-picker > span,
+.select-picker > span,
+.choice-picker > span {
+  display: block;
+  margin: 0 0 6px 4px;
+  color: #777;
+  font-size: 11px;
+  font-weight: 700;
+}
+.number-picker > div {
+  min-height: 52px;
+  padding: 4px;
+  border: 1px solid var(--line);
+  border-radius: 16px;
+  display: grid;
+  grid-template-columns: 38px 1fr 38px;
+  align-items: center;
+}
+.number-picker button {
+  width: 34px;
+  height: 34px;
+  border: 0;
+  border-radius: 10px;
+  background: var(--faint);
+  font-size: 18px;
+  cursor: pointer;
+}
+.number-picker button:disabled {
+  opacity: 0.25;
+  cursor: not-allowed;
+}
+.number-picker strong {
+  text-align: center;
+  font-size: 14px;
+}
+.select-picker select {
+  width: 100%;
+  min-height: 52px;
+  padding: 0 16px;
+  border: 1px solid var(--line);
+  border-radius: 16px;
+  background: #fff;
+  color: var(--ink);
+  font: inherit;
+  font-size: 14px;
+  font-weight: 700;
+  cursor: pointer;
+}
+.choice-picker > div {
+  min-height: 52px;
+  padding: 4px;
+  border: 1px solid var(--line);
+  border-radius: 16px;
+  display: flex;
+  background: var(--faint);
+}
+.choice-picker button {
+  min-width: 60px;
+  flex: 1;
+  padding: 0 12px;
+  border: 0;
+  border-radius: 11px;
+  background: transparent;
+  color: #777;
+  font-weight: 700;
+  cursor: pointer;
+}
+.choice-picker button.is-selected {
+  background: #fff;
+  color: var(--ink);
+  box-shadow: 0 2px 8px rgb(0 0 0 / 8%);
+}
+.beat-choice-picker {
+  min-width: 250px;
+}
+.beat-choice-picker button {
+  min-width: 48px;
 }
 .edition {
   justify-self: end;
@@ -382,13 +523,19 @@ button {
   stroke-linejoin: round;
   stroke-width: 1.6;
 }
-.spectator-label {
+.spectator-label,
+.demo-label {
   padding: 5px 8px;
   border-radius: 999px;
   background: var(--faint);
   color: var(--ink);
   font-size: 11px;
   font-weight: 750;
+}
+.demo-label {
+  background: var(--ink);
+  color: #fff;
+  letter-spacing: 0.08em;
 }
 .top-divider {
   width: 1px;
@@ -430,6 +577,20 @@ button {
   border-radius: 24px;
   background: #fff;
   line-height: 0;
+}
+.demo-room-mark {
+  width: 150px;
+  height: 150px;
+  flex: 0 0 auto;
+  border: 1px solid var(--line);
+  border-radius: 24px;
+  background: var(--ink);
+  color: #fff;
+  display: grid;
+  place-items: center;
+  font-size: 18px;
+  font-weight: 800;
+  letter-spacing: 0.16em;
 }
 
 .players-section {
@@ -528,6 +689,32 @@ button {
 }
 .player-card.is-ready p {
   color: #bdbdbd;
+}
+.runner-lineup {
+  margin-top: 10px;
+  display: flex;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+.runner-lineup span {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  color: #777;
+  font-size: 10px;
+  font-weight: 650;
+}
+.player-card.is-ready .runner-lineup span {
+  color: #cfcfca;
+}
+.runner-lineup i {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+}
+.runner-lineup .runner-lineup-more {
+  color: #555;
+  font-weight: 750;
 }
 .player-actions {
   position: relative;
@@ -731,6 +918,18 @@ button {
   line-height: 1;
   letter-spacing: -0.055em;
 }
+.race.is-stadium .race-heading {
+  margin-bottom: clamp(12px, 1.8vh, 24px);
+}
+.race.is-stadium {
+  padding-bottom: 8px;
+}
+.race.is-stadium .race-heading h1 {
+  font-size: clamp(34px, 4vw, 62px);
+}
+.race.is-stadium .race-instruction {
+  display: none;
+}
 .recording-dot {
   display: inline-block;
   width: 7px;
@@ -757,6 +956,9 @@ button {
   display: flex;
   align-items: flex-end;
   gap: 24px;
+}
+.end-race-control {
+  position: relative;
 }
 .end-race-button {
   min-height: 44px;
@@ -785,14 +987,48 @@ button {
   outline: 3px solid var(--ink);
   outline-offset: 3px;
 }
-.end-race-button.is-confirming {
-  border-color: var(--ink);
-  background: var(--ink);
-  color: #fff;
-}
 .end-race-button:disabled {
   cursor: not-allowed;
   opacity: 0.36;
+}
+.end-race-confirmation {
+  position: absolute;
+  z-index: 30;
+  top: calc(100% + 10px);
+  right: 0;
+  width: min(310px, calc(100vw - 40px));
+  padding: 16px;
+  border: 1px solid #d8d8d3;
+  border-radius: 18px;
+  background: #fff;
+  box-shadow: 0 14px 40px rgb(0 0 0 / 14%);
+}
+.end-race-confirmation p {
+  margin: 0 0 14px;
+  color: #3e3e3b;
+  font-size: 14px;
+  line-height: 1.45;
+}
+.end-race-confirmation > div {
+  display: grid;
+  grid-template-columns: 1fr 1.35fr;
+  gap: 8px;
+}
+.end-race-confirmation button {
+  min-height: 40px;
+  border-radius: 12px;
+  font-weight: 700;
+  cursor: pointer;
+}
+.end-race-cancel {
+  border: 1px solid #d8d8d3;
+  background: #fff;
+  color: #555;
+}
+.end-race-confirm {
+  border: 1px solid var(--ink);
+  background: var(--ink);
+  color: #fff;
 }
 .track-list {
   display: flex;
@@ -849,6 +1085,29 @@ button {
   height: 54px;
   margin-right: 18px;
 }
+.relay-track-segments {
+  position: absolute;
+  inset: 6px 0;
+  display: flex;
+  overflow: hidden;
+  border-radius: 12px;
+}
+.relay-track-segments span {
+  position: relative;
+  flex: 1;
+  border-right: 1px solid;
+}
+.relay-track-segments span:last-child {
+  border-right: 0;
+}
+.relay-track-segments i {
+  position: absolute;
+  top: 5px;
+  left: 6px;
+  width: 5px;
+  height: 5px;
+  border-radius: 50%;
+}
 .track-marks {
   position: absolute;
   left: 0;
@@ -876,12 +1135,21 @@ button {
   height: 46px;
   transform: translate(-50%, -50%);
   border-radius: 50%;
-  background: var(--ink);
+  background: var(--runner-color, var(--ink));
   display: grid;
   place-items: center;
   transition: left 220ms var(--ease-out);
   animation: beat-arrive 220ms var(--ease-out);
   z-index: 2;
+}
+.track.is-handoff .racer:not(.next-racer) {
+  animation: handoff-pulse 900ms ease-in-out infinite alternate;
+}
+.next-racer {
+  opacity: 0.58;
+  transform: translate(0, -50%) scale(0.82);
+  animation: next-runner-arrive 260ms var(--ease-out) both;
+  z-index: 3;
 }
 .racer .heart-solid {
   width: 21px;
@@ -918,6 +1186,243 @@ button {
 .beat-score span {
   color: #888;
   font-size: 12px;
+}
+.beat-score small {
+  display: flex;
+  margin-top: 5px;
+  color: #777;
+  font-size: 10px;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 4px;
+}
+.beat-score small i {
+  width: 58px;
+  height: 3px;
+  overflow: hidden;
+  border-radius: 999px;
+  background: #e5e5e2;
+}
+.beat-score small b {
+  display: block;
+  height: 100%;
+  border-radius: inherit;
+  background: var(--ink);
+  transition: width 220ms var(--ease-out);
+}
+.stadium-race {
+  min-height: 0;
+  flex: 1;
+  display: grid;
+  grid-template-rows: minmax(260px, 1fr) auto;
+  align-content: center;
+  gap: clamp(10px, 1.5vh, 18px);
+}
+.stadium-canvas {
+  position: relative;
+  width: min(100%, 1080px, calc(52vh * 1.923));
+  aspect-ratio: 1000 / 520;
+  align-self: center;
+  justify-self: center;
+  isolation: isolate;
+}
+.stadium-canvas > svg {
+  display: block;
+  width: 100%;
+  height: 100%;
+  overflow: visible;
+}
+.stadium-outer {
+  fill: #ef6259;
+  stroke: #cbd6d8;
+  stroke-width: 9;
+}
+.stadium-lane-line {
+  fill: none;
+  stroke: #cce8ef;
+  stroke-width: 3;
+}
+.stadium-infield {
+  fill: #b7ca4b;
+  stroke: #718f39;
+  stroke-width: 8;
+}
+.stadium-guide {
+  fill: none;
+  stroke: rgb(255 255 255 / 28%);
+  stroke-width: 10;
+  stroke-dasharray: 3 9;
+}
+.stadium-finish-check {
+  stroke: #111;
+  stroke-width: 2;
+}
+.stadium-finish-post {
+  fill: none;
+  stroke: #333;
+  stroke-width: 3;
+}
+.stadium-finish-label-bg {
+  fill: #3e3e42;
+  stroke: #171719;
+  stroke-width: 2;
+}
+.stadium-finish-label {
+  fill: #fff;
+  font-size: 24px;
+  font-weight: 800;
+  letter-spacing: 0.04em;
+  text-anchor: middle;
+}
+.stadium-racer {
+  position: absolute;
+  width: 40px;
+  height: 40px;
+  transform: translate(-50%, -50%);
+  border: 4px solid var(--runner-color, #fff);
+  border-radius: 50%;
+  background: var(--team-color, var(--ink));
+  display: grid;
+  place-items: center;
+  box-shadow:
+    0 5px 14px rgb(0 0 0 / 23%),
+    inset 0 0 0 2px rgb(255 255 255 / 55%);
+  transition:
+    left 230ms var(--ease-out),
+    top 230ms var(--ease-out);
+}
+.stadium-racer .heart-solid {
+  width: 18px;
+  fill: #fff;
+}
+.stadium-racer > strong {
+  position: absolute;
+  left: 50%;
+  top: calc(100% + 7px);
+  transform: translateX(-50%);
+  max-width: 86px;
+  padding: 3px 6px;
+  border-radius: 999px;
+  background: rgb(255 255 255 / 90%);
+  color: #222;
+  font-size: 9px;
+  line-height: 1;
+  white-space: nowrap;
+  box-shadow: 0 2px 8px rgb(0 0 0 / 10%);
+}
+.stadium-racer.is-packed {
+  width: 36px;
+  height: 36px;
+}
+.stadium-racer.is-packed .heart-solid {
+  width: 16px;
+}
+.stadium-racer.is-packed > strong {
+  display: none;
+}
+.stadium-racer.is-accent .racer-pulse {
+  border-width: 2px;
+  animation: accent-ring 620ms var(--ease-out) both;
+}
+.stadium-racer.is-handoff {
+  animation: stadium-handoff-pulse 900ms ease-in-out infinite alternate;
+}
+.stadium-next-racer {
+  opacity: 0.62;
+  transform: translate(-50%, -50%) scale(0.82);
+  animation: next-runner-arrive 260ms var(--ease-out) both;
+}
+.stadium-infield-copy {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  transform: translate(-50%, -50%);
+  color: #526527;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 6px;
+  text-align: center;
+}
+.stadium-infield-copy span {
+  font-size: 10px;
+  font-weight: 800;
+  letter-spacing: 0.16em;
+}
+.stadium-infield-copy strong {
+  font-size: clamp(12px, 1.2vw, 17px);
+}
+.stadium-scoreboard {
+  width: min(100%, 1080px);
+  margin: 0 auto;
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+  gap: 8px;
+}
+.stadium-team-card {
+  min-width: 0;
+  padding: 11px 13px 10px;
+  border: 1px solid var(--line);
+  border-top: 4px solid var(--team-color);
+  border-radius: 14px;
+  background: #fff;
+}
+.stadium-team-card > div {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.stadium-team-rank {
+  width: 22px;
+  height: 22px;
+  flex: 0 0 auto;
+  border-radius: 50%;
+  background: var(--team-color);
+  color: #fff;
+  display: grid;
+  place-items: center;
+  font-size: 10px;
+  font-weight: 800;
+}
+.stadium-team-card h2 {
+  margin: 0;
+  overflow: hidden;
+  font-size: 15px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.stadium-team-card p {
+  margin: 6px 0 8px;
+  overflow: hidden;
+  color: #666;
+  font-size: 10px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.stadium-team-card p strong {
+  color: var(--ink);
+  font-size: 13px;
+}
+.stadium-team-card footer {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  gap: 4px 10px;
+  color: #777;
+  font-size: 9px;
+}
+.stadium-team-card footer i {
+  height: 3px;
+  overflow: hidden;
+  grid-column: 1 / -1;
+  border-radius: 99px;
+  background: #e8e8e5;
+}
+.stadium-team-card footer b {
+  display: block;
+  height: 100%;
+  border-radius: inherit;
+  background: var(--team-color);
+  transition: width 230ms var(--ease-out);
 }
 .race-instruction {
   margin: 26px 0 0;
@@ -1106,6 +1611,26 @@ button {
   }
 }
 
+@keyframes handoff-pulse {
+  from {
+    transform: translate(-50%, -50%) scale(0.9);
+    opacity: 0.6;
+  }
+  to {
+    transform: translate(-50%, -50%) scale(1.06);
+    opacity: 1;
+  }
+}
+
+@keyframes stadium-handoff-pulse {
+  from {
+    transform: translate(-50%, -50%) scale(0.92);
+  }
+  to {
+    transform: translate(-50%, -50%) scale(1.06);
+  }
+}
+
 @media (max-width: 760px) {
   .desktop-only {
     display: none;
@@ -1118,6 +1643,16 @@ button {
   .join-panel {
     align-items: stretch;
     flex-direction: column;
+  }
+  .race-setup,
+  .relay-options {
+    width: 100%;
+  }
+  .mode-picker,
+  .number-picker,
+  .select-picker,
+  .choice-picker {
+    flex: 1;
   }
   .edition {
     justify-self: start;
@@ -1156,6 +1691,34 @@ button {
     grid-template-columns: 130px 1fr 56px;
     gap: 10px;
   }
+  .race.is-stadium {
+    padding-inline: 14px;
+  }
+  .race.is-stadium .race-heading h1 {
+    font-size: clamp(28px, 8vw, 42px);
+  }
+  .stadium-race {
+    grid-template-rows: auto auto;
+  }
+  .stadium-canvas {
+    width: 100%;
+  }
+  .stadium-racer {
+    width: 34px;
+    height: 34px;
+    border-width: 3px;
+  }
+  .stadium-racer .heart-solid {
+    width: 15px;
+  }
+  .stadium-racer > strong {
+    top: calc(100% + 4px);
+    padding: 2px 4px;
+    font-size: 7px;
+  }
+  .stadium-scoreboard {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
   .lane-number {
     display: none;
   }
@@ -1184,6 +1747,17 @@ button {
   }
   .spectator-status {
     text-align: left;
+  }
+}
+
+@keyframes next-runner-arrive {
+  from {
+    opacity: 0;
+    filter: blur(3px);
+  }
+  to {
+    opacity: 0.58;
+    filter: blur(0);
   }
 }
 

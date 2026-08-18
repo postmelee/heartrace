@@ -1,13 +1,25 @@
 import {
+  DEFAULT_HANDOFF_DURATION_MS,
   DEFAULT_FINISH_BEATS,
+  MAX_RELAY_RUNNERS,
+  MAX_TEAM_COUNT,
   MAX_PLAYERS,
+  MIN_RELAY_RUNNERS,
+  MIN_TEAM_COUNT,
+  RELAY_LEG_BEAT_OPTIONS,
+  RELAY_RUNNER_COLORS,
   type AcceptedBeat,
   type BeatEvent,
   type BeatRejectReason,
+  type FinishReason,
   type MeasurementUpdate,
+  type PlayerRelaySnapshot,
   type PlayerSnapshot,
+  type RaceMode,
+  type RelayRoomSettings,
   type RoomPhase,
   type RoomSnapshot,
+  type TrackMode,
 } from "@heartrace/protocol";
 
 const MIN_IBI_MS = 270;
@@ -29,6 +41,10 @@ export interface PlayerState extends PlayerSnapshot {
 export interface RoomState {
   code: string;
   phase: RoomPhase;
+  mode: RaceMode;
+  trackMode: TrackMode;
+  demo: boolean;
+  relaySettings: RelayRoomSettings | null;
   finishBeats: number;
   hostToken: string;
   hostSocketId: string | null;
@@ -36,6 +52,7 @@ export interface RoomState {
   countdownEndsAt: number | null;
   startedAt: number | null;
   finishedAt: number | null;
+  finishReason: FinishReason | null;
   nextFinishPlace: number;
 }
 
@@ -45,6 +62,7 @@ export interface BeatAcceptance {
   event?: AcceptedBeat;
   beatCount: number;
   raceFinished: boolean;
+  handoffStarted: boolean;
 }
 
 export function createRoomState(input: {
@@ -52,15 +70,32 @@ export function createRoomState(input: {
   hostToken: string;
   hostSocketId: string;
   finishBeats?: number;
+  mode?: RaceMode;
+  trackMode?: TrackMode;
+  demo?: boolean;
+  relay?: {
+    teamCount: number;
+    runnersPerTeam: number;
+    legBeats: number;
+  };
 }): RoomState {
-  const finishBeats = Math.min(
-    300,
-    Math.max(10, Math.round(input.finishBeats ?? DEFAULT_FINISH_BEATS)),
-  );
+  const mode = input.mode ?? "individual";
+  const relaySettings =
+    mode === "relay" ? normalizeRelaySettings(input.relay) : null;
+  const finishBeats = relaySettings
+    ? relaySettings.legBeats
+    : Math.min(
+        300,
+        Math.max(10, Math.round(input.finishBeats ?? DEFAULT_FINISH_BEATS)),
+      );
 
   return {
     code: input.code,
     phase: "lobby",
+    mode,
+    trackMode: input.trackMode ?? "straight",
+    demo: input.demo ?? false,
+    relaySettings,
     finishBeats,
     hostToken: input.hostToken,
     hostSocketId: input.hostSocketId,
@@ -68,6 +103,7 @@ export function createRoomState(input: {
     countdownEndsAt: null,
     startedAt: null,
     finishedAt: null,
+    finishReason: null,
     nextFinishPlace: 1,
   };
 }
@@ -79,13 +115,19 @@ export function addPlayer(
     token: string;
     socketId: string;
     nickname: string;
+    runnerNames?: string[];
   },
 ): PlayerState {
   if (room.phase !== "lobby") {
     throw new Error("경기가 진행 중인 방에는 새로 입장할 수 없습니다.");
   }
-  if (room.players.size >= MAX_PLAYERS) {
-    throw new Error(`한 방에는 최대 ${MAX_PLAYERS}명까지 입장할 수 있습니다.`);
+  const participantLimit = room.relaySettings?.teamCount ?? MAX_PLAYERS;
+  if (room.players.size >= participantLimit) {
+    throw new Error(
+      room.mode === "relay"
+        ? `이 방에는 ${participantLimit}팀이 모두 입장했습니다.`
+        : `한 방에는 최대 ${MAX_PLAYERS}명까지 입장할 수 있습니다.`,
+    );
   }
 
   const nickname = input.nickname.trim().slice(0, 12);
@@ -106,6 +148,7 @@ export function addPlayer(
     beatCount: 0,
     distanceRatio: 0,
     finishPlace: null,
+    relay: createPlayerRelay(room, input.runnerNames),
     lastSequence: -1,
     seenBeatIds: new Set(),
     lastAcceptedDetectedAt: null,
@@ -156,6 +199,14 @@ export function startCountdown(room: RoomState, now: number): number {
     throw new Error("대기 중인 방만 시작할 수 있습니다.");
   if (room.players.size < 1) throw new Error("참가자가 한 명 이상 필요합니다.");
   if (
+    room.relaySettings &&
+    room.players.size !== room.relaySettings.teamCount
+  ) {
+    throw new Error(
+      `${room.relaySettings.teamCount}팀이 모두 입장해야 경기를 시작할 수 있습니다.`,
+    );
+  }
+  if (
     [...room.players.values()].some(
       (player) => !player.connected || !player.ready,
     )
@@ -164,6 +215,7 @@ export function startCountdown(room: RoomState, now: number): number {
   }
 
   resetRaceProgress(room);
+  room.finishReason = null;
   room.phase = "countdown";
   // 경기용 카메라가 다시 마운트되는 동안에는 '준비'를 보여주고, 그 뒤
   // 3·2·1이 각각 온전히 1초씩 보이도록 2.2초의 준비 시간을 둡니다.
@@ -178,11 +230,22 @@ export function beginRace(room: RoomState, now: number): void {
   room.countdownEndsAt = null;
 }
 
+export function endRace(room: RoomState, now: number): void {
+  if (room.phase !== "racing") {
+    throw new Error("진행 중인 경기만 종료할 수 있습니다.");
+  }
+  room.phase = "finished";
+  room.countdownEndsAt = null;
+  room.finishedAt = now;
+  room.finishReason = "host_ended";
+}
+
 export function resetRoom(room: RoomState): void {
   room.phase = "lobby";
   room.countdownEndsAt = null;
   room.startedAt = null;
   room.finishedAt = null;
+  room.finishReason = null;
   resetRaceProgress(room);
   for (const player of room.players.values()) {
     player.ready = false;
@@ -200,6 +263,15 @@ export function acceptBeat(
   if (!player) return rejected("unknown_player", 0);
   if (room.phase === "finished") return rejected("finished", player.beatCount);
   if (room.phase !== "racing") return rejected("not_racing", player.beatCount);
+  if (player.relay?.status === "handoff") {
+    if (
+      player.relay.handoffEndsAt === null ||
+      acceptedAt < player.relay.handoffEndsAt
+    ) {
+      return rejected("handoff", player.beatCount);
+    }
+    completeRelayHandoff(room, playerId, acceptedAt);
+  }
   if (player.seenBeatIds.has(beat.id))
     return rejected("duplicate", player.beatCount);
   if (
@@ -260,10 +332,26 @@ export function acceptBeat(
   player.bpm = Math.max(30, Math.min(220, Math.round(beat.bpm)));
   player.signalQuality = clamp01(beat.signalQuality);
   player.beatCount += 1;
-  player.distanceRatio = Math.min(1, player.beatCount / room.finishBeats);
+  const finishTarget = player.relay
+    ? room.finishBeats * player.relay.runners.length
+    : room.finishBeats;
+  player.distanceRatio = Math.min(1, player.beatCount / finishTarget);
+  updateRelayProgress(room, player);
 
-  if (player.beatCount >= room.finishBeats && player.finishPlace === null) {
+  if (player.beatCount >= finishTarget && player.finishPlace === null) {
     player.finishPlace = room.nextFinishPlace++;
+  }
+
+  let handoffStarted = false;
+  if (
+    player.finishPlace === null &&
+    player.relay &&
+    player.beatCount >= player.relay.legFinishBeat
+  ) {
+    player.relay.status = "handoff";
+    player.relay.handoffEndsAt =
+      acceptedAt + (room.relaySettings?.handoffDurationMs ?? 0);
+    handoffStarted = true;
   }
 
   const event: AcceptedBeat = {
@@ -276,6 +364,14 @@ export function acceptBeat(
     accent: player.beatCount % 3 === 0,
     acceptedAt,
     source: beat.source,
+    relay: player.relay
+      ? {
+          runnerIndex: player.relay.activeRunnerIndex,
+          handoffEndsAt: player.relay.handoffEndsAt,
+          legDistanceRatio: player.relay.legDistanceRatio,
+          teamDistanceRatio: player.relay.teamDistanceRatio,
+        }
+      : null,
   };
 
   const connectedPlayers = [...room.players.values()].filter(
@@ -288,9 +384,54 @@ export function acceptBeat(
   if (raceFinished) {
     room.phase = "finished";
     room.finishedAt = acceptedAt;
+    room.finishReason = "completed";
   }
 
-  return { accepted: true, event, beatCount: player.beatCount, raceFinished };
+  return {
+    accepted: true,
+    event,
+    beatCount: player.beatCount,
+    raceFinished,
+    handoffStarted,
+  };
+}
+
+export function completeRelayHandoff(
+  room: RoomState,
+  playerId: string,
+  now: number,
+): boolean {
+  const player = room.players.get(playerId);
+  const relay = player?.relay;
+  if (
+    !player ||
+    !relay ||
+    relay.status !== "handoff" ||
+    relay.handoffEndsAt === null ||
+    now < relay.handoffEndsAt
+  ) {
+    return false;
+  }
+
+  relay.activeRunnerIndex = Math.min(
+    relay.runners.length - 1,
+    relay.activeRunnerIndex + 1,
+  );
+  relay.status = "running";
+  relay.handoffEndsAt = null;
+  relay.legStartBeat = player.beatCount;
+  relay.legFinishBeat = room.finishBeats * (relay.activeRunnerIndex + 1);
+  updateRelayProgress(room, player);
+
+  // 한 휴대폰을 다음 사람에게 넘겨도 참가 세션과 전체 거리는 유지하지만,
+  // 이전 사람의 cadence/BPM을 다음 주자에게 물려주지는 않습니다.
+  player.measurementState = "measuring";
+  player.ready = false;
+  player.bpm = null;
+  player.signalQuality = 0;
+  player.lastAcceptedDetectedAt = null;
+  player.bridgedSinceObserved = 0;
+  return true;
 }
 
 export function toSnapshot(room: RoomState): RoomSnapshot {
@@ -306,6 +447,12 @@ export function toSnapshot(room: RoomState): RoomSnapshot {
       beatCount: player.beatCount,
       distanceRatio: player.distanceRatio,
       finishPlace: player.finishPlace,
+      relay: player.relay
+        ? {
+            ...player.relay,
+            runners: player.relay.runners.map((runner) => ({ ...runner })),
+          }
+        : null,
     }))
     .sort((a, b) => {
       if (a.finishPlace !== null && b.finishPlace !== null) {
@@ -319,6 +466,10 @@ export function toSnapshot(room: RoomState): RoomSnapshot {
   return {
     code: room.code,
     phase: room.phase,
+    mode: room.mode,
+    trackMode: room.trackMode,
+    demo: room.demo,
+    relaySettings: room.relaySettings ? { ...room.relaySettings } : null,
     serverNow: Date.now(),
     finishBeats: room.finishBeats,
     hostConnected: room.hostSocketId !== null,
@@ -326,6 +477,7 @@ export function toSnapshot(room: RoomState): RoomSnapshot {
     countdownEndsAt: room.countdownEndsAt,
     startedAt: room.startedAt,
     finishedAt: room.finishedAt,
+    finishReason: room.finishReason,
   };
 }
 
@@ -339,7 +491,135 @@ function resetRaceProgress(room: RoomState): void {
     player.seenBeatIds.clear();
     player.lastAcceptedDetectedAt = null;
     player.bridgedSinceObserved = 0;
+    if (player.relay) {
+      player.relay.activeRunnerIndex = 0;
+      player.relay.status = "running";
+      player.relay.handoffEndsAt = null;
+      player.relay.legStartBeat = 0;
+      player.relay.legFinishBeat = room.finishBeats;
+      updateRelayProgress(room, player);
+    }
   }
+}
+
+function normalizeRelaySettings(
+  input:
+    | {
+        teamCount: number;
+        runnersPerTeam: number;
+        legBeats: number;
+      }
+    | undefined,
+): RelayRoomSettings {
+  if (!input) throw new Error("팀전 설정을 확인해 주세요.");
+  const teamCount = Math.round(input.teamCount);
+  const runnersPerTeam = Math.round(input.runnersPerTeam);
+  const legBeats = Math.round(input.legBeats);
+  if (
+    !Number.isInteger(teamCount) ||
+    teamCount < MIN_TEAM_COUNT ||
+    teamCount > MAX_TEAM_COUNT
+  ) {
+    throw new Error(
+      `팀 수는 ${MIN_TEAM_COUNT}~${MAX_TEAM_COUNT}팀이어야 합니다.`,
+    );
+  }
+  if (
+    !Number.isInteger(runnersPerTeam) ||
+    runnersPerTeam < MIN_RELAY_RUNNERS ||
+    runnersPerTeam > MAX_RELAY_RUNNERS
+  ) {
+    throw new Error(
+      `팀별 주자는 ${MIN_RELAY_RUNNERS}~${MAX_RELAY_RUNNERS}명이어야 합니다.`,
+    );
+  }
+  if (!RELAY_LEG_BEAT_OPTIONS.some((option) => option === legBeats)) {
+    throw new Error("주자당 박동은 10·20·30·60 중에서 선택해 주세요.");
+  }
+  return {
+    teamCount,
+    runnersPerTeam,
+    legBeats,
+    handoffDurationMs: DEFAULT_HANDOFF_DURATION_MS,
+  };
+}
+
+function createPlayerRelay(
+  room: RoomState,
+  runnerNames: string[] | undefined,
+): PlayerRelaySnapshot | null {
+  const settings = room.relaySettings;
+  if (!settings) return null;
+  const runners = Array.from(
+    { length: settings.runnersPerTeam },
+    (_, index) => {
+      const suppliedName = runnerNames?.[index]?.trim().slice(0, 12);
+      return {
+        index,
+        name: suppliedName || `${index + 1}번 주자`,
+        color: runnerColor(index),
+      };
+    },
+  );
+  return {
+    runners,
+    activeRunnerIndex: 0,
+    status: "running",
+    handoffEndsAt: null,
+    legStartBeat: 0,
+    legFinishBeat: room.finishBeats,
+    legBeatCount: 0,
+    legDistanceRatio: 0,
+    teamDistanceRatio: 0,
+    completedRunners: 0,
+    lap: 1,
+  };
+}
+
+function updateRelayProgress(room: RoomState, player: PlayerState): void {
+  const relay = player.relay;
+  if (!relay) return;
+  relay.legBeatCount = Math.max(0, player.beatCount - relay.legStartBeat);
+  relay.legDistanceRatio = Math.min(1, relay.legBeatCount / room.finishBeats);
+  relay.teamDistanceRatio = player.distanceRatio;
+  relay.completedRunners = Math.min(
+    relay.runners.length,
+    Math.floor(player.beatCount / room.finishBeats),
+  );
+  relay.lap = relay.activeRunnerIndex + 1;
+}
+
+function runnerColor(index: number): string {
+  if (index < RELAY_RUNNER_COLORS.length) return RELAY_RUNNER_COLORS[index]!;
+  return hslToHex((index * 137.508) % 360, 72, index % 2 === 0 ? 48 : 58);
+}
+
+function hslToHex(hue: number, saturation: number, lightness: number): string {
+  const s = saturation / 100;
+  const l = lightness / 100;
+  const chroma = (1 - Math.abs(2 * l - 1)) * s;
+  const segment = hue / 60;
+  const secondary = chroma * (1 - Math.abs((segment % 2) - 1));
+  const [red, green, blue] =
+    segment < 1
+      ? [chroma, secondary, 0]
+      : segment < 2
+        ? [secondary, chroma, 0]
+        : segment < 3
+          ? [0, chroma, secondary]
+          : segment < 4
+            ? [0, secondary, chroma]
+            : segment < 5
+              ? [secondary, 0, chroma]
+              : [chroma, 0, secondary];
+  const match = l - chroma / 2;
+  return `#${[red, green, blue]
+    .map((channel) =>
+      Math.round((channel + match) * 255)
+        .toString(16)
+        .padStart(2, "0"),
+    )
+    .join("")}`;
 }
 
 function clamp01(value: number): number {
@@ -347,5 +627,11 @@ function clamp01(value: number): number {
 }
 
 function rejected(reason: BeatRejectReason, beatCount: number): BeatAcceptance {
-  return { accepted: false, reason, beatCount, raceFinished: false };
+  return {
+    accepted: false,
+    reason,
+    beatCount,
+    raceFinished: false,
+    handoffStarted: false,
+  };
 }

@@ -8,6 +8,8 @@ import {
   acceptBeat,
   addPlayer,
   beginRace,
+  endRace,
+  completeRelayHandoff,
   createRoomState,
   removePlayer,
   resetRoom,
@@ -20,6 +22,7 @@ import {
 import type {
   Ack,
   BeatAck,
+  BeatEvent,
   ClientToServerEvents,
   HostCreateRoomResponse,
   PlayerJoinResponse,
@@ -67,6 +70,8 @@ const io = new Server<
 
 const rooms = new Map<string, RoomState>();
 const countdownTimers = new Map<string, NodeJS.Timeout>();
+const relayHandoffTimers = new Map<string, NodeJS.Timeout>();
+const demoBeatTimers = new Map<string, NodeJS.Timeout>();
 const playerCleanupTimers = new Map<string, NodeJS.Timeout>();
 const PLAYER_DISCONNECT_GRACE_MS = 15_000;
 
@@ -84,6 +89,11 @@ app.get("/rooms/:code", (request, response) => {
 io.on("connection", (socket) => {
   socket.on("host:create-room", (request, ack) => {
     try {
+      if (request.demo && request.mode !== "relay") {
+        throw new Error(
+          "모의 경기는 팀 이어달리기 모드에서만 만들 수 있습니다.",
+        );
+      }
       const code = createRoomCode();
       const hostToken = createToken();
       const room = createRoomState({
@@ -93,7 +103,14 @@ io.on("connection", (socket) => {
         ...(request.finishBeats === undefined
           ? {}
           : { finishBeats: request.finishBeats }),
+        ...(request.mode === undefined ? {} : { mode: request.mode }),
+        ...(request.trackMode === undefined
+          ? {}
+          : { trackMode: request.trackMode }),
+        ...(request.demo === undefined ? {} : { demo: request.demo }),
+        ...(request.relay === undefined ? {} : { relay: request.relay }),
       });
+      if (room.demo) populateDemoRoom(room);
       rooms.set(code, room);
       attachSocket(socket, code, "host");
       ok<HostCreateRoomResponse>(ack, { room: toSnapshot(room), hostToken });
@@ -109,6 +126,7 @@ io.on("connection", (socket) => {
     }
     room.hostSocketId = socket.id;
     attachSocket(socket, room.code, "host");
+    if (room.demo && room.phase === "racing") startDemoSimulation(room);
     return ack({ ok: true, data: { room: toSnapshot(room) } });
   });
 
@@ -125,6 +143,9 @@ io.on("connection", (socket) => {
     try {
       const room = rooms.get(normalizeCode(request.roomCode));
       if (!room) throw new Error("방 코드를 다시 확인해 주세요.");
+      if (room.demo) {
+        throw new Error("모의 경기에는 휴대폰 참가자가 입장할 수 없습니다.");
+      }
 
       if (request.playerId || request.playerToken) {
         const resumed =
@@ -154,6 +175,9 @@ io.on("connection", (socket) => {
         token: createToken(),
         socketId: socket.id,
         nickname: request.nickname,
+        ...(request.runnerNames === undefined
+          ? {}
+          : { runnerNames: request.runnerNames }),
       });
       attachSocket(socket, room.code, "player", player.id);
       emitSnapshot(room);
@@ -180,6 +204,7 @@ io.on("connection", (socket) => {
     if (!context) return ack({ ok: true, data: { left: true } });
 
     clearPlayerCleanup(context.room.code, context.player.id);
+    clearRelayHandoff(context.room.code, context.player.id);
     // 명시적인 나가기는 네트워크 단절과 달리 재연결을 기다리지 않습니다.
     // 경기 중이어도 즉시 제거해 앱과 호스트 양쪽에 이전 참가자가 남지 않게 합니다.
     removePlayer(context.room, context.player.id);
@@ -195,12 +220,15 @@ io.on("connection", (socket) => {
       emitSnapshot(room);
 
       clearCountdown(room.code);
+      clearRoomRelayHandoffs(room.code);
+      clearDemoSimulation(room.code);
       countdownTimers.set(
         room.code,
         setTimeout(
           () => {
             beginRace(room, Date.now());
             emitSnapshot(room);
+            if (room.demo) startDemoSimulation(room);
             countdownTimers.delete(room.code);
           },
           Math.max(0, countdownEndsAt - Date.now()),
@@ -216,10 +244,29 @@ io.on("connection", (socket) => {
     try {
       const room = getHostRoom(request.roomCode, request.hostToken);
       clearCountdown(room.code);
+      clearRoomRelayHandoffs(room.code);
+      clearDemoSimulation(room.code);
       removeDisconnectedPlayers(room);
       resetRoom(room);
+      if (room.demo) prepareDemoPlayers(room);
       emitSnapshot(room);
       return ack({ ok: true, data: { room: toSnapshot(room) } });
+    } catch (error) {
+      return fail(ack, error);
+    }
+  });
+
+  socket.on("host:end", (request, ack) => {
+    try {
+      const room = getHostRoom(request.roomCode, request.hostToken);
+      clearCountdown(room.code);
+      clearRoomRelayHandoffs(room.code);
+      clearDemoSimulation(room.code);
+      endRace(room, Date.now());
+      const snapshot = toSnapshot(room);
+      emitSnapshot(room);
+      io.to(room.code).emit("race:finished", snapshot);
+      return ack({ ok: true, data: { room: snapshot } });
     } catch (error) {
       return fail(ack, error);
     }
@@ -231,10 +278,14 @@ io.on("connection", (socket) => {
       if (room.phase !== "lobby") {
         throw new Error("대기 화면에서만 참가자를 내보낼 수 있습니다.");
       }
+      if (room.demo) {
+        throw new Error("모의 경기의 가상 팀은 내보낼 수 없습니다.");
+      }
       const player = room.players.get(request.playerId);
       if (!player) throw new Error("이미 나간 참가자입니다.");
 
       clearPlayerCleanup(room.code, player.id);
+      clearRelayHandoff(room.code, player.id);
       const playerSocket = player.socketId
         ? io.sockets.sockets.get(player.socketId)
         : undefined;
@@ -275,6 +326,9 @@ io.on("connection", (socket) => {
     if (!result.accepted || !result.event) return;
     io.to(context.room.code).emit("race:beat", result.event);
     emitSnapshot(context.room);
+    if (result.handoffStarted) {
+      scheduleRelayHandoff(context.room, context.player.id);
+    }
     if (result.raceFinished) {
       io.to(context.room.code).emit("race:finished", toSnapshot(context.room));
     }
@@ -288,6 +342,7 @@ io.on("connection", (socket) => {
 
     if (socket.data.role === "host" && room.hostSocketId === socket.id) {
       room.hostSocketId = null;
+      if (room.demo) clearDemoSimulation(room.code);
     }
     if (socket.data.role === "player" && socket.data.playerId) {
       const player = room.players.get(socket.data.playerId);
@@ -343,10 +398,169 @@ function emitSnapshot(room: RoomState): void {
   io.to(room.code).emit("room:snapshot", toSnapshot(room));
 }
 
+function populateDemoRoom(room: RoomState): void {
+  const settings = room.relaySettings;
+  if (!settings) throw new Error("모의 경기의 팀 설정을 확인해 주세요.");
+
+  for (let teamIndex = 0; teamIndex < settings.teamCount; teamIndex += 1) {
+    const playerId = `mock-${room.code}-${teamIndex + 1}`;
+    addPlayer(room, {
+      id: playerId,
+      token: createToken(),
+      socketId: `mock:${playerId}`,
+      nickname: `모의 ${teamIndex + 1}팀`,
+      runnerNames: Array.from(
+        { length: settings.runnersPerTeam },
+        (_, runnerIndex) => `${runnerIndex + 1}번 주자`,
+      ),
+    });
+  }
+  prepareDemoPlayers(room);
+}
+
+function prepareDemoPlayers(room: RoomState): void {
+  [...room.players.values()].forEach((player, teamIndex) => {
+    updateMeasurement(player, {
+      state: "ready",
+      bpm: demoBpm(teamIndex, 0, 0),
+      signalQuality: 0.96,
+    });
+  });
+}
+
+function startDemoSimulation(room: RoomState): void {
+  clearDemoSimulation(room.code);
+  [...room.players.values()].forEach((player, teamIndex) => {
+    scheduleDemoBeat(room, player.id, teamIndex, 280 + teamIndex * 110);
+  });
+}
+
+function scheduleDemoBeat(
+  room: RoomState,
+  playerId: string,
+  teamIndex: number,
+  delayMs: number,
+): void {
+  const key = demoBeatKey(room.code, playerId);
+  const previous = demoBeatTimers.get(key);
+  if (previous) clearTimeout(previous);
+
+  const timer = setTimeout(() => {
+    demoBeatTimers.delete(key);
+    const player = room.players.get(playerId);
+    if (
+      !room.demo ||
+      room.phase !== "racing" ||
+      !player ||
+      player.finishPlace !== null
+    ) {
+      return;
+    }
+
+    if (player.relay?.status === "handoff") {
+      scheduleDemoBeat(room, playerId, teamIndex, 120);
+      return;
+    }
+
+    const sequence = player.lastSequence + 1;
+    const runnerIndex = player.relay?.activeRunnerIndex ?? 0;
+    const bpm = demoBpm(teamIndex, runnerIndex, sequence);
+    const ibiMs = Math.round(60_000 / bpm);
+    const beat: BeatEvent = {
+      id: randomUUID(),
+      sequence,
+      detectedAt: Date.now(),
+      ibiMs,
+      bpm,
+      confidence: 0.97,
+      signalQuality: 0.96,
+      source: "observed",
+    };
+    const result = acceptBeat(room, playerId, beat, Date.now());
+
+    if (result.accepted && result.event) {
+      io.to(room.code).emit("race:beat", result.event);
+      emitSnapshot(room);
+      if (result.handoffStarted) scheduleRelayHandoff(room, playerId);
+      if (result.raceFinished) {
+        clearDemoSimulation(room.code);
+        io.to(room.code).emit("race:finished", toSnapshot(room));
+        return;
+      }
+    }
+
+    scheduleDemoBeat(room, playerId, teamIndex, ibiMs);
+  }, delayMs);
+  timer.unref();
+  demoBeatTimers.set(key, timer);
+}
+
+function demoBpm(
+  teamIndex: number,
+  runnerIndex: number,
+  sequence: number,
+): number {
+  const cadenceOffset = ((sequence % 5) - 2) * 2;
+  return Math.min(
+    180,
+    108 + teamIndex * 10 + (runnerIndex % 4) * 3 + cadenceOffset,
+  );
+}
+
+function clearDemoSimulation(roomCode: string): void {
+  for (const key of [...demoBeatTimers.keys()]) {
+    if (!key.startsWith(`${roomCode}:`)) continue;
+    const timer = demoBeatTimers.get(key);
+    if (timer) clearTimeout(timer);
+    demoBeatTimers.delete(key);
+  }
+}
+
+function demoBeatKey(roomCode: string, playerId: string): string {
+  return `${roomCode}:${playerId}`;
+}
+
 function clearCountdown(code: string): void {
   const timer = countdownTimers.get(code);
   if (timer) clearTimeout(timer);
   countdownTimers.delete(code);
+}
+
+function scheduleRelayHandoff(room: RoomState, playerId: string): void {
+  const player = room.players.get(playerId);
+  const handoffEndsAt = player?.relay?.handoffEndsAt;
+  if (!player || handoffEndsAt === null || handoffEndsAt === undefined) return;
+  clearRelayHandoff(room.code, playerId);
+  const key = relayHandoffKey(room.code, playerId);
+  const timer = setTimeout(
+    () => {
+      relayHandoffTimers.delete(key);
+      if (completeRelayHandoff(room, playerId, Date.now())) emitSnapshot(room);
+    },
+    Math.max(0, handoffEndsAt - Date.now()),
+  );
+  timer.unref();
+  relayHandoffTimers.set(key, timer);
+}
+
+function clearRelayHandoff(roomCode: string, playerId: string): void {
+  const key = relayHandoffKey(roomCode, playerId);
+  const timer = relayHandoffTimers.get(key);
+  if (timer) clearTimeout(timer);
+  relayHandoffTimers.delete(key);
+}
+
+function clearRoomRelayHandoffs(roomCode: string): void {
+  for (const key of [...relayHandoffTimers.keys()]) {
+    if (!key.startsWith(`${roomCode}:`)) continue;
+    const timer = relayHandoffTimers.get(key);
+    if (timer) clearTimeout(timer);
+    relayHandoffTimers.delete(key);
+  }
+}
+
+function relayHandoffKey(roomCode: string, playerId: string): string {
+  return `${roomCode}:${playerId}`;
 }
 
 function schedulePlayerCleanup(roomCode: string, playerId: string): void {

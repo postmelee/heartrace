@@ -1,9 +1,12 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { QRCodeSVG } from "qrcode.react";
 import { io, type Socket } from "socket.io-client";
+import { MAX_TEAM_COUNT } from "@heartrace/protocol";
 import type {
   AcceptedBeat,
   ClientToServerEvents,
+  HostCreateRoomRequest,
+  PlayerSnapshot,
   RoomSnapshot,
   ServerToClientEvents,
 } from "@heartrace/protocol";
@@ -12,6 +15,7 @@ const SOCKET_URL = import.meta.env.VITE_SOCKET_URL ?? "http://localhost:3001";
 const PUBLIC_URL = import.meta.env.VITE_PUBLIC_URL ?? window.location.origin;
 const IOS_INSTALL_URL = import.meta.env.VITE_IOS_INSTALL_URL ?? "";
 const STORAGE_KEY = "heartrace:host-session";
+const DEMO_STORAGE_KEY = "heartrace:demo-host-session";
 
 type GameSocket = Socket<ServerToClientEvents, ClientToServerEvents>;
 
@@ -26,15 +30,17 @@ export default function App() {
   if (path === "/watch") return <SpectatorApp />;
   if (path === "/privacy") return <PrivacyPage />;
   if (path === "/support") return <SupportPage />;
+  if (path === "/demo") return <HostApp demo />;
   return <HostApp />;
 }
 
-function HostApp() {
+function HostApp({ demo = false }: { demo?: boolean }) {
+  const storageKey = demo ? DEMO_STORAGE_KEY : STORAGE_KEY;
   const socketRef = useRef<GameSocket | null>(null);
   const [connected, setConnected] = useState(false);
   const [room, setRoom] = useState<RoomSnapshot | null>(null);
   const [session, setSession] = useState<HostSession | null>(() =>
-    loadSession(),
+    loadSession(storageKey),
   );
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
@@ -52,7 +58,7 @@ function HostApp() {
 
     const resume = () => {
       setConnected(true);
-      const stored = loadSession();
+      const stored = loadSession(storageKey);
       if (!stored) return;
       socket.emit("host:resume", stored, (result) => {
         if (result.ok) {
@@ -60,7 +66,7 @@ function HostApp() {
           setRoom(result.data.room);
           setError(null);
         } else {
-          clearSession();
+          clearSession(storageKey);
           setSession(null);
           setRoom(null);
         }
@@ -79,28 +85,31 @@ function HostApp() {
       socket.disconnect();
       socketRef.current = null;
     };
-  }, []);
+  }, [storageKey]);
 
-  const createRoom = useCallback(() => {
-    const socket = socketRef.current;
-    if (!socket?.connected) {
-      setError("서버와 연결 중입니다. 잠시 후 다시 눌러 주세요.");
-      return;
-    }
-    setBusy(true);
-    setError(null);
-    socket.emit("host:create-room", { finishBeats: 60 }, (result) => {
-      setBusy(false);
-      if (!result.ok) return setError(result.error);
-      const nextSession = {
-        roomCode: result.data.room.code,
-        hostToken: result.data.hostToken,
-      };
-      localStorage.setItem(STORAGE_KEY, JSON.stringify(nextSession));
-      setSession(nextSession);
-      setRoom(result.data.room);
-    });
-  }, []);
+  const createRoom = useCallback(
+    (request: HostCreateRoomRequest) => {
+      const socket = socketRef.current;
+      if (!socket?.connected) {
+        setError("서버와 연결 중입니다. 잠시 후 다시 눌러 주세요.");
+        return;
+      }
+      setBusy(true);
+      setError(null);
+      socket.emit("host:create-room", request, (result) => {
+        setBusy(false);
+        if (!result.ok) return setError(result.error);
+        const nextSession = {
+          roomCode: result.data.room.code,
+          hostToken: result.data.hostToken,
+        };
+        localStorage.setItem(storageKey, JSON.stringify(nextSession));
+        setSession(nextSession);
+        setRoom(result.data.room);
+      });
+    },
+    [storageKey],
+  );
 
   const startRace = useCallback(() => {
     if (!session || !socketRef.current) return;
@@ -117,6 +126,18 @@ function HostApp() {
     setBusy(true);
     setError(null);
     socketRef.current.emit("host:reset", session, (result) => {
+      setBusy(false);
+      if (!result.ok) return setError(result.error);
+      setRoom(result.data.room);
+      setBeatEffects({});
+    });
+  }, [session]);
+
+  const endRace = useCallback(() => {
+    if (!session || !socketRef.current) return;
+    setBusy(true);
+    setError(null);
+    socketRef.current.emit("host:end", session, (result) => {
       setBusy(false);
       if (!result.ok) return setError(result.error);
       setRoom(result.data.room);
@@ -143,12 +164,12 @@ function HostApp() {
   );
 
   const leaveRoom = useCallback(() => {
-    clearSession();
+    clearSession(storageKey);
     setSession(null);
     setRoom(null);
     setBeatEffects({});
     setError(null);
-  }, []);
+  }, [storageKey]);
 
   if (!room || !session) {
     return (
@@ -157,6 +178,7 @@ function HostApp() {
         busy={busy}
         error={error}
         onCreate={createRoom}
+        demo={demo}
       />
     );
   }
@@ -171,6 +193,7 @@ function HostApp() {
         code={room.code}
         onLeave={leaveRoom}
         watchUrl={watchUrl.toString()}
+        demo={room.demo}
       />
       {room.phase === "lobby" && (
         <Lobby
@@ -189,7 +212,7 @@ function HostApp() {
           room={room}
           beatEffects={beatEffects}
           busy={busy}
-          onEnd={resetRace}
+          onEnd={endRace}
         />
       )}
       {room.phase === "finished" && (
@@ -275,7 +298,12 @@ function SpectatorApp() {
 
   return (
     <main className="app-shell spectator-shell">
-      <TopBar connected={connected} code={room.code} mode="spectator" />
+      <TopBar
+        connected={connected}
+        code={room.code}
+        mode="spectator"
+        demo={room.demo}
+      />
       {room.phase === "lobby" && (
         <Lobby
           room={room}
@@ -490,47 +518,254 @@ function Home({
   busy,
   error,
   onCreate,
+  demo = false,
 }: {
   connected: boolean;
   busy: boolean;
   error: string | null;
-  onCreate: () => void;
+  onCreate: (request: HostCreateRoomRequest) => void;
+  demo?: boolean;
 }) {
+  const [mode, setMode] = useState<"individual" | "relay">(
+    demo ? "relay" : "individual",
+  );
+  const [teamCount, setTeamCount] = useState(2);
+  const [runnersPerTeam, setRunnersPerTeam] = useState(3);
+  const [legBeats, setLegBeats] = useState<10 | 20 | 30 | 60>(20);
+  const [trackMode, setTrackMode] = useState<"straight" | "circular">(
+    "straight",
+  );
+  const createRequest: HostCreateRoomRequest =
+    mode === "relay"
+      ? {
+          finishBeats: legBeats,
+          mode,
+          trackMode,
+          demo,
+          relay: { teamCount, runnersPerTeam, legBeats },
+        }
+      : { finishBeats: 60, mode };
+
   return (
-    <main className="home page-enter">
+    <main className={`home page-enter ${demo ? "is-demo" : ""}`}>
       <div className="home-kicker">
         <LiveDot live={connected} />
-        참여형 운동회
+        {demo ? "휴대폰 없는 리허설" : "참여형 운동회"}
       </div>
       <div className="home-copy">
-        <p className="eyebrow">HEART RACE</p>
+        <p className="eyebrow">{demo ? "HEART RACE · MOCK" : "HEART RACE"}</p>
         <h1>
-          아무도 달리지 않지만,
-          <br />
-          모두의 심장은 달립니다.
+          {demo ? (
+            <>
+              가상의 심장으로,
+              <br />팀 경기를 리허설합니다.
+            </>
+          ) : (
+            <>
+              아무도 달리지 않지만,
+              <br />
+              모두의 심장은 달립니다.
+            </>
+          )}
         </h1>
         <p className="home-description">
-          휴대폰 카메라에 손가락을 올리고 심박수를 조절하세요.
-          <br className="desktop-only" /> 박동 한 번이 곧 한 걸음입니다.
+          {demo ? (
+            <>
+              팀과 주자 수를 정하면 서버가 가상 박동을 생성합니다.
+              <br className="desktop-only" /> 실제 트랙과 바톤 전환을 그대로
+              확인할 수 있습니다.
+            </>
+          ) : (
+            <>
+              휴대폰 카메라에 손가락을 올리고 심박수를 조절하세요.
+              <br className="desktop-only" /> 박동 한 번이 곧 한 걸음입니다.
+            </>
+          )}
         </p>
       </div>
       <div className="home-action">
+        <div className="race-setup" aria-label="경기 방식 설정">
+          {!demo && (
+            <div className="mode-picker" role="group" aria-label="경기 방식">
+              <button
+                type="button"
+                className={mode === "individual" ? "is-selected" : ""}
+                onClick={() => setMode("individual")}
+              >
+                개인전
+              </button>
+              <button
+                type="button"
+                className={mode === "relay" ? "is-selected" : ""}
+                onClick={() => setMode("relay")}
+              >
+                팀 이어달리기
+              </button>
+            </div>
+          )}
+          {mode === "relay" && (
+            <div className="relay-options">
+              <NumberPicker
+                label="팀 수"
+                value={teamCount}
+                min={2}
+                max={MAX_TEAM_COUNT}
+                suffix="팀"
+                onChange={setTeamCount}
+              />
+              <SelectPicker
+                label="팀별 주자"
+                value={runnersPerTeam}
+                min={2}
+                max={30}
+                suffix="명"
+                onChange={setRunnersPerTeam}
+              />
+              <div className="choice-picker">
+                <span>트랙</span>
+                <div role="group" aria-label="트랙 모양">
+                  <button
+                    type="button"
+                    className={trackMode === "straight" ? "is-selected" : ""}
+                    aria-pressed={trackMode === "straight"}
+                    onClick={() => setTrackMode("straight")}
+                  >
+                    직선
+                  </button>
+                  <button
+                    type="button"
+                    className={trackMode === "circular" ? "is-selected" : ""}
+                    aria-pressed={trackMode === "circular"}
+                    onClick={() => setTrackMode("circular")}
+                  >
+                    원형
+                  </button>
+                </div>
+              </div>
+              <div className="choice-picker beat-choice-picker">
+                <span>주자당 박동</span>
+                <div role="group" aria-label="주자당 완주 박동 수">
+                  {([10, 20, 30, 60] as const).map((option) => (
+                    <button
+                      type="button"
+                      key={option}
+                      className={legBeats === option ? "is-selected" : ""}
+                      aria-pressed={legBeats === option}
+                      onClick={() => setLegBeats(option)}
+                    >
+                      {option}
+                    </button>
+                  ))}
+                </div>
+              </div>
+            </div>
+          )}
+        </div>
         <button
           className="primary-button hero-button"
-          onClick={onCreate}
+          onClick={() => onCreate(createRequest)}
           disabled={busy}
         >
-          {busy ? "경기장 만드는 중…" : "새 경기 만들기"}
+          {busy
+            ? "경기장 만드는 중…"
+            : demo
+              ? "모의 경기 만들기"
+              : "새 경기 만들기"}
           <ArrowIcon />
         </button>
+        {!demo && (
+          <a className="demo-entry" href="/demo">
+            휴대폰 없이 테스트하기
+          </a>
+        )}
         {error && (
           <p className="error-message" role="alert">
             {error}
           </p>
         )}
       </div>
-      <p className="edition">전시용 프로토타입 · 2026</p>
+      <p className="edition">
+        {demo
+          ? "가상 박동은 의료 측정값이 아닙니다."
+          : "전시용 프로토타입 · 2026"}
+      </p>
     </main>
+  );
+}
+
+function NumberPicker({
+  label,
+  value,
+  min,
+  max,
+  suffix,
+  onChange,
+}: {
+  label: string;
+  value: number;
+  min: number;
+  max: number;
+  suffix: string;
+  onChange: (value: number) => void;
+}) {
+  return (
+    <div className="number-picker">
+      <span>{label}</span>
+      <div>
+        <button
+          type="button"
+          aria-label={`${label} 줄이기`}
+          disabled={value <= min}
+          onClick={() => onChange(Math.max(min, value - 1))}
+        >
+          −
+        </button>
+        <strong>
+          {value}
+          {suffix}
+        </strong>
+        <button
+          type="button"
+          aria-label={`${label} 늘리기`}
+          disabled={value >= max}
+          onClick={() => onChange(Math.min(max, value + 1))}
+        >
+          +
+        </button>
+      </div>
+    </div>
+  );
+}
+
+function SelectPicker({
+  label,
+  value,
+  min,
+  max,
+  suffix,
+  onChange,
+}: {
+  label: string;
+  value: number;
+  min: number;
+  max: number;
+  suffix: string;
+  onChange: (value: number) => void;
+}) {
+  return (
+    <label className="select-picker">
+      <span>{label}</span>
+      <select value={value} onChange={(event) => onChange(+event.target.value)}>
+        {Array.from({ length: max - min + 1 }, (_, index) => min + index).map(
+          (option) => (
+            <option key={option} value={option}>
+              {option}
+              {suffix}
+            </option>
+          ),
+        )}
+      </select>
+    </label>
   );
 }
 
@@ -540,12 +775,14 @@ function TopBar({
   onLeave,
   watchUrl,
   mode = "host",
+  demo = false,
 }: {
   connected: boolean;
   code: string;
   onLeave?: () => void;
   watchUrl?: string;
   mode?: "host" | "spectator";
+  demo?: boolean;
 }) {
   const [copied, setCopied] = useState(false);
 
@@ -594,6 +831,7 @@ function TopBar({
           {mode === "spectator" && (
             <span className="spectator-label">관전 중</span>
           )}
+          {demo && <span className="demo-label">MOCK</span>}
           <span>방 {code}</span>
         </div>
       </div>
@@ -617,11 +855,15 @@ function Lobby({
   readOnly?: boolean;
 }) {
   const [openMenuPlayerId, setOpenMenuPlayerId] = useState<string | null>(null);
+  const isRelay = room.mode === "relay" && room.relaySettings !== null;
+  const expectedParticipants = room.relaySettings?.teamCount;
   const readyCount = room.players.filter(
     (player) => player.connected && player.ready,
   ).length;
   const allReady =
     room.players.length > 0 &&
+    (expectedParticipants === undefined ||
+      room.players.length === expectedParticipants) &&
     room.players.every((player) => player.connected && player.ready);
   const joinUrl = new URL("/join", PUBLIC_URL);
   joinUrl.searchParams.set("room", room.code);
@@ -631,7 +873,13 @@ function Lobby({
     <section className="lobby page-enter">
       <div className="join-panel">
         <div>
-          <p className="eyebrow">휴대폰에서 방 코드를 입력하세요</p>
+          <p className="eyebrow">
+            {room.demo
+              ? "가상 팀의 준비가 완료되었습니다"
+              : isRelay
+                ? "각 팀의 대표 휴대폰에서 방 코드를 입력하세요"
+                : "휴대폰에서 방 코드를 입력하세요"}
+          </p>
           <p
             className="room-code"
             aria-label={`방 코드 ${room.code.split("").join(" ")}`}
@@ -639,27 +887,35 @@ function Lobby({
             {room.code}
           </p>
           <p className="join-help">
-            심장 달리기 앱을 열고 닉네임과 코드를 입력하세요.
+            {room.demo
+              ? "경기 시작을 누르면 서버가 팀마다 서로 다른 가상 심박을 발생시킵니다."
+              : `심장 달리기 앱을 열고 ${isRelay ? "팀 이름" : "닉네임"}과 코드를 입력하세요.`}
           </p>
         </div>
-        <div className="qr-frame" aria-label="앱 입장 QR 코드">
-          <QRCodeSVG
-            value={joinUri}
-            size={150}
-            level="M"
-            bgColor="#ffffff"
-            fgColor="#050505"
-          />
-        </div>
+        {room.demo ? (
+          <div className="demo-room-mark" aria-label="모의 경기">
+            MOCK
+          </div>
+        ) : (
+          <div className="qr-frame" aria-label="앱 입장 QR 코드">
+            <QRCodeSVG
+              value={joinUri}
+              size={150}
+              level="M"
+              bgColor="#ffffff"
+              fgColor="#050505"
+            />
+          </div>
+        )}
       </div>
 
       <div className="players-section">
         <div className="section-heading">
           <div>
-            <p className="eyebrow">참가자</p>
+            <p className="eyebrow">{isRelay ? "참가 팀" : "참가자"}</p>
             <h2>
               {room.players.length > 0
-                ? `${readyCount} / ${room.players.length} 준비 완료`
+                ? `${readyCount} / ${expectedParticipants ?? room.players.length} 준비 완료`
                 : "입장을 기다리는 중"}
             </h2>
           </div>
@@ -697,8 +953,23 @@ function Lobby({
                         ? `${player.bpm} BPM · ${measurementLabel(player.measurementState)}`
                         : measurementLabel(player.measurementState)}
                 </p>
+                {player.relay && (
+                  <div className="runner-lineup" aria-label="주자 순서">
+                    {player.relay.runners.slice(0, 6).map((runner) => (
+                      <span key={runner.index}>
+                        <i style={{ background: runner.color }} />
+                        {runner.name}
+                      </span>
+                    ))}
+                    {player.relay.runners.length > 6 && (
+                      <span className="runner-lineup-more">
+                        +{player.relay.runners.length - 6}명
+                      </span>
+                    )}
+                  </div>
+                )}
               </div>
-              {!readOnly && (
+              {!readOnly && !room.demo && (
                 <div
                   className="player-actions"
                   onBlur={(event) => {
@@ -758,9 +1029,17 @@ function Lobby({
         <div className="rule-copy">
           <HeartOutline />
           <p>
-            <strong>한 번의 박동 = 한 걸음</strong>
+            <strong>
+              {isRelay
+                ? `한 팀 ${room.relaySettings?.runnersPerTeam}명 · 주자당 ${room.relaySettings?.legBeats}박동 · 바톤 전환 5초`
+                : "한 번의 박동 = 한 걸음"}
+            </strong>
             <br />
-            먼저 {room.finishBeats}번 뛰는 심장이 우승합니다.
+            {isRelay
+              ? room.trackMode === "circular"
+                ? "주자마다 원형 트랙을 한 바퀴 달린 뒤 다음 주자에게 바톤을 넘깁니다."
+                : "주자마다 직선 트랙 전체를 달린 뒤 다음 주자가 출발합니다."
+              : `먼저 ${room.finishBeats}번 뛰는 심장이 우승합니다.`}
           </p>
         </div>
         {readOnly ? (
@@ -825,7 +1104,13 @@ function Countdown({
     <section className="countdown" aria-live="assertive">
       {!readOnly && (
         <div className="countdown-end-control">
-          <EndRaceButton busy={busy} onEnd={onEnd} />
+          <EndRaceButton
+            busy={busy}
+            onEnd={onEnd}
+            label="출발 취소"
+            busyLabel="취소하는 중…"
+            confirmation="출발을 취소하고 준비 화면으로 돌아갈까요?"
+          />
         </div>
       )}
       <p>손가락을 그대로 유지하세요</p>
@@ -853,14 +1138,23 @@ function Race({
   readOnly?: boolean;
 }) {
   const leader = useMemo(() => room.players[0], [room.players]);
+  const isStadiumRace =
+    room.trackMode === "circular" &&
+    room.mode === "relay" &&
+    room.players.every((player) => player.relay !== null);
   return (
-    <section className="race page-enter">
+    <section className={`race page-enter ${isStadiumRace ? "is-stadium" : ""}`}>
       <div className="race-heading">
         <div>
           <p className="eyebrow">
-            <span className="recording-dot" /> 경기 중
+            <span className="recording-dot" />{" "}
+            {room.demo ? "모의 경기 중" : "경기 중"}
           </p>
-          <h1>심장이 달리고 있습니다</h1>
+          <h1>
+            {room.demo
+              ? "가상 심장이 달리고 있습니다"
+              : "심장이 달리고 있습니다"}
+          </h1>
         </div>
         <div className="race-actions">
           <div className="leader-copy">
@@ -871,45 +1165,106 @@ function Race({
         </div>
       </div>
 
-      <div className="track-list">
-        {room.players.map((player, index) => {
-          const beat = beatEffects[player.id];
-          const effectKey = beat?.beatId ?? "initial";
-          return (
-            <article className="track" key={player.id}>
-              <div className="track-meta">
-                <span className="lane-number">{index + 1}</span>
-                <div>
-                  <h2>{player.nickname}</h2>
-                  <p>
-                    <strong>{player.bpm ?? "—"}</strong> BPM
-                  </p>
+      {isStadiumRace ? (
+        <StadiumRace room={room} beatEffects={beatEffects} />
+      ) : (
+        <div className="track-list">
+          {room.players.map((player, index) => {
+            const beat = beatEffects[player.id];
+            const effectKey = beat?.beatId ?? "initial";
+            const relay = player.relay;
+            const activeRunner = relay?.runners[relay.activeRunnerIndex];
+            const nextRunner = relay?.runners[relay.activeRunnerIndex + 1];
+            const progressRatio =
+              relay?.legDistanceRatio ?? player.distanceRatio;
+            const displayedBeatCount = relay?.legBeatCount ?? player.beatCount;
+            const runnerKey = relay?.activeRunnerIndex ?? "individual";
+            return (
+              <article
+                className={`track ${relay ? "is-relay" : ""} ${relay?.status === "handoff" ? "is-handoff" : ""}`}
+                key={player.id}
+              >
+                <div className="track-meta">
+                  <span className="lane-number">{index + 1}</span>
+                  <div>
+                    <h2>{player.nickname}</h2>
+                    <p>
+                      {relay?.status === "handoff" ? (
+                        <>
+                          <strong>바톤 전달 중</strong>
+                          {nextRunner ? ` · 다음 ${nextRunner.name}` : ""}
+                        </>
+                      ) : (
+                        <>
+                          {activeRunner && `${activeRunner.name} · `}
+                          <strong>{player.bpm ?? "—"}</strong> BPM
+                        </>
+                      )}
+                    </p>
+                  </div>
                 </div>
-              </div>
-              <div className="track-rail">
-                <div className="track-marks" aria-hidden="true" />
-                <div
-                  className="track-progress"
-                  style={{ width: `${player.distanceRatio * 100}%` }}
-                />
-                <div
-                  className={`racer ${beat?.accent ? "is-accent" : ""}`}
-                  style={{ left: `${player.distanceRatio * 100}%` }}
-                  key={effectKey}
-                >
-                  <span className="racer-pulse" />
-                  <HeartSolid />
+                <div className="track-rail">
+                  <div className="track-marks" aria-hidden="true" />
+                  <div
+                    className="track-progress"
+                    key={`${runnerKey}:progress`}
+                    style={{
+                      width: `${progressRatio * 100}%`,
+                      ...(activeRunner
+                        ? { backgroundColor: activeRunner.color }
+                        : {}),
+                    }}
+                  />
+                  <div
+                    className={`racer ${beat?.accent ? "is-accent" : ""}`}
+                    style={{
+                      left: `${progressRatio * 100}%`,
+                      ...(activeRunner
+                        ? ({
+                            "--runner-color": activeRunner.color,
+                          } as React.CSSProperties)
+                        : {}),
+                    }}
+                    key={`${runnerKey}:${effectKey}`}
+                  >
+                    <span className="racer-pulse" />
+                    <HeartSolid />
+                  </div>
+                  {relay?.status === "handoff" && nextRunner && (
+                    <div
+                      className="racer next-racer"
+                      style={
+                        {
+                          left: 0,
+                          "--runner-color": nextRunner.color,
+                        } as React.CSSProperties
+                      }
+                      aria-label={`${nextRunner.name} 출발 준비`}
+                    >
+                      <HeartSolid />
+                    </div>
+                  )}
+                  <span className="finish-line">결승</span>
                 </div>
-                <span className="finish-line">결승</span>
-              </div>
-              <div className="beat-score">
-                <strong>{player.beatCount}</strong>
-                <span>/ {room.finishBeats}</span>
-              </div>
-            </article>
-          );
-        })}
-      </div>
+                <div className="beat-score">
+                  <strong>{displayedBeatCount}</strong>
+                  <span>/ {room.finishBeats}</span>
+                  {relay && (
+                    <small>
+                      {relay.completedRunners}/{relay.runners.length} 주자
+                      <i>
+                        <b
+                          style={{ width: `${relay.teamDistanceRatio * 100}%` }}
+                        />
+                      </i>
+                    </small>
+                  )}
+                </div>
+              </article>
+            );
+          })}
+        </div>
+      )}
       <p className="race-instruction">
         휴대폰 화면의 심박수를 보며, 자신의 심장을 움직여 보세요.
       </p>
@@ -917,30 +1272,398 @@ function Race({
   );
 }
 
-function EndRaceButton({ busy, onEnd }: { busy: boolean; onEnd: () => void }) {
+function StadiumRace({
+  room,
+  beatEffects,
+}: {
+  room: RoomSnapshot;
+  beatEffects: Record<string, AcceptedBeat>;
+}) {
+  const teamColorById = new Map(
+    [...room.players]
+      .sort((first, second) => first.id.localeCompare(second.id))
+      .map((player, index) => [
+        player.id,
+        STADIUM_TEAM_COLORS[index % STADIUM_TEAM_COLORS.length],
+      ]),
+  );
+  const entries = room.players.flatMap((player, rankingIndex) => {
+    if (!player.relay) return [];
+    return [
+      {
+        player,
+        relay: player.relay,
+        rankingIndex,
+        teamColor: teamColorById.get(player.id) ?? STADIUM_TEAM_COLORS[0],
+        progress: stadiumRelayProgress(player.relay),
+      },
+    ];
+  });
+
+  return (
+    <div className="stadium-race">
+      <div
+        className="stadium-canvas"
+        role="img"
+        aria-label="모든 팀이 같은 거리의 중앙 주로를 한 바퀴씩 달리는 운동장 트랙"
+      >
+        <svg viewBox="0 0 1000 520" aria-hidden="true">
+          <defs>
+            <pattern
+              id={`finish-check-${room.code}`}
+              width="14"
+              height="14"
+              patternUnits="userSpaceOnUse"
+            >
+              <rect width="14" height="14" fill="#fff" />
+              <rect width="7" height="7" fill="#111" />
+              <rect x="7" y="7" width="7" height="7" fill="#111" />
+            </pattern>
+          </defs>
+          <path className="stadium-outer" d={stadiumPath(235, 765, 215)} />
+          {[195, 175, 155, 135].map((radius) => (
+            <path
+              className="stadium-lane-line"
+              d={stadiumPath(235, 765, radius)}
+              key={radius}
+            />
+          ))}
+          <path className="stadium-infield" d={stadiumPath(235, 765, 115)} />
+          <path className="stadium-guide" d={STADIUM_CENTER_PATH} />
+          <rect
+            className="stadium-finish-check"
+            x="875"
+            y="249"
+            width="105"
+            height="22"
+            fill={`url(#finish-check-${room.code})`}
+          />
+          <path className="stadium-finish-post" d="M875 249V172H982" />
+          <rect
+            className="stadium-finish-label-bg"
+            x="872"
+            y="133"
+            width="112"
+            height="42"
+            rx="4"
+          />
+          <text className="stadium-finish-label" x="928" y="162">
+            FINISH
+          </text>
+        </svg>
+
+        {entries.map(({ player, relay, rankingIndex, teamColor, progress }) => {
+          const collisionSlot = stadiumCollisionSlot(
+            entries,
+            player.id,
+            progress,
+          );
+          const position = stadiumPoint(
+            progress,
+            collisionSlot.normalOffset,
+            collisionSlot.tangentOffset,
+          );
+          const activeRunner = relay.runners[relay.activeRunnerIndex];
+          const beat = beatEffects[player.id];
+          return (
+            <div
+              className={`stadium-racer ${beat?.accent ? "is-accent" : ""} ${relay.status === "handoff" ? "is-handoff" : ""} ${collisionSlot.collisionCount >= 5 ? "is-packed" : ""}`}
+              style={
+                {
+                  left: position.left,
+                  top: position.top,
+                  zIndex: 100 - rankingIndex,
+                  "--team-color": teamColor,
+                  "--runner-color": activeRunner?.color,
+                } as React.CSSProperties
+              }
+              key={player.id}
+              aria-label={`${player.nickname} ${activeRunner?.name ?? "주자"}`}
+            >
+              <span className="racer-pulse" key={beat?.beatId ?? "initial"} />
+              <HeartSolid />
+              <strong>{player.nickname.slice(-2)}</strong>
+            </div>
+          );
+        })}
+
+        {entries.map(({ player, relay, progress, rankingIndex, teamColor }) => {
+          const nextRunner = relay.runners[relay.activeRunnerIndex + 1];
+          if (relay.status !== "handoff" || !nextRunner) return null;
+          const collisionSlot = stadiumCollisionSlot(
+            entries,
+            player.id,
+            progress,
+          );
+          const position = stadiumPoint(
+            progress,
+            collisionSlot.normalOffset,
+            collisionSlot.tangentOffset - 24,
+          );
+          return (
+            <div
+              className="stadium-racer stadium-next-racer"
+              style={
+                {
+                  left: position.left,
+                  top: position.top,
+                  zIndex: 110 - rankingIndex,
+                  "--team-color": teamColor,
+                  "--runner-color": nextRunner.color,
+                } as React.CSSProperties
+              }
+              key={`${player.id}:next`}
+              aria-label={`${player.nickname} ${nextRunner.name} 출발 준비`}
+            >
+              <HeartSolid />
+            </div>
+          );
+        })}
+
+        <div className="stadium-infield-copy" aria-hidden="true">
+          <span>SHARED TRACK</span>
+          <strong>모든 팀이 같은 거리를 달립니다</strong>
+        </div>
+      </div>
+
+      <div className="stadium-scoreboard">
+        {entries.map(({ player, relay, teamColor }, index) => {
+          const activeRunner = relay.runners[relay.activeRunnerIndex];
+          const nextRunner = relay.runners[relay.activeRunnerIndex + 1];
+          return (
+            <article
+              className="stadium-team-card"
+              style={
+                {
+                  "--team-color": teamColor,
+                } as React.CSSProperties
+              }
+              key={player.id}
+            >
+              <div>
+                <span className="stadium-team-rank">{index + 1}</span>
+                <h2>{player.nickname}</h2>
+              </div>
+              <p>
+                {relay.status === "handoff" ? (
+                  <>바톤 전달 중 · 다음 {nextRunner?.name ?? "주자"}</>
+                ) : (
+                  <>
+                    {activeRunner?.name} · <strong>{player.bpm ?? "—"}</strong>{" "}
+                    BPM
+                  </>
+                )}
+              </p>
+              <footer>
+                <span>
+                  {relay.legBeatCount}/{room.finishBeats} 박동
+                </span>
+                <span>
+                  {relay.completedRunners}/{relay.runners.length} 주자
+                </span>
+                <i>
+                  <b style={{ width: `${relay.teamDistanceRatio * 100}%` }} />
+                </i>
+              </footer>
+            </article>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
+
+const STADIUM_CENTER_PATH = stadiumPath(235, 765, 165);
+const STADIUM_TEAM_COLORS = [
+  "#d93e68",
+  "#216fd1",
+  "#ef7f24",
+  "#219b69",
+  "#7656d6",
+  "#087f8c",
+];
+const STADIUM_PACK_SLOTS = [
+  { tangentOffset: 30, normalOffset: 0 },
+  { tangentOffset: 10, normalOffset: -22 },
+  { tangentOffset: 10, normalOffset: 22 },
+  { tangentOffset: -10, normalOffset: -22 },
+  { tangentOffset: -10, normalOffset: 22 },
+  { tangentOffset: -30, normalOffset: 0 },
+];
+
+function stadiumPath(leftCenter: number, rightCenter: number, radius: number) {
+  const top = 260 - radius;
+  const bottom = 260 + radius;
+  return `M ${leftCenter} ${top} H ${rightCenter} A ${radius} ${radius} 0 0 1 ${rightCenter} ${bottom} H ${leftCenter} A ${radius} ${radius} 0 0 1 ${leftCenter} ${top} Z`;
+}
+
+function stadiumRelayProgress(
+  relay: NonNullable<PlayerSnapshot["relay"]>,
+): number {
+  return relay.legDistanceRatio;
+}
+
+function stadiumPoint(
+  progress: number,
+  normalOffset: number,
+  tangentOffset = 0,
+) {
+  const leftCenter = 235;
+  const rightCenter = 765;
+  const centerY = 260;
+  const radius = 165;
+  const straightLength = rightCenter - leftCenter;
+  const quarterArc = (Math.PI * radius) / 2;
+  const halfArc = Math.PI * radius;
+  const totalLength = straightLength * 2 + halfArc * 2;
+  const normalized = ((progress % 1) + 1) % 1;
+
+  const basePoint = (value: number) => {
+    let distance = (((value % 1) + 1) % 1) * totalLength;
+    if (distance <= quarterArc) {
+      const angle = distance / radius;
+      return {
+        x: rightCenter + radius * Math.cos(angle),
+        y: centerY + radius * Math.sin(angle),
+      };
+    }
+    distance -= quarterArc;
+    if (distance <= straightLength) {
+      return { x: rightCenter - distance, y: centerY + radius };
+    }
+    distance -= straightLength;
+    if (distance <= halfArc) {
+      const angle = Math.PI / 2 + distance / radius;
+      return {
+        x: leftCenter + radius * Math.cos(angle),
+        y: centerY + radius * Math.sin(angle),
+      };
+    }
+    distance -= halfArc;
+    if (distance <= straightLength) {
+      return { x: leftCenter + distance, y: centerY - radius };
+    }
+    distance -= straightLength;
+    const angle = (Math.PI * 3) / 2 + distance / radius;
+    return {
+      x: rightCenter + radius * Math.cos(angle),
+      y: centerY + radius * Math.sin(angle),
+    };
+  };
+
+  const point = basePoint(normalized);
+  const ahead = basePoint(normalized + 0.0005);
+  const tangentX = ahead.x - point.x;
+  const tangentY = ahead.y - point.y;
+  const tangentLength = Math.hypot(tangentX, tangentY) || 1;
+  const x =
+    point.x +
+    (-tangentY / tangentLength) * normalOffset +
+    (tangentX / tangentLength) * tangentOffset;
+  const y =
+    point.y +
+    (tangentX / tangentLength) * normalOffset +
+    (tangentY / tangentLength) * tangentOffset;
+  return {
+    left: `${(x / 1000) * 100}%`,
+    top: `${(y / 520) * 100}%`,
+  };
+}
+
+function stadiumCollisionSlot<
+  T extends { player: { id: string }; progress: number },
+>(entries: T[], playerId: string, progress: number) {
+  const closeEntries = entries.filter(
+    (candidate) =>
+      circularProgressDistance(candidate.progress, progress) < 0.04,
+  );
+  if (closeEntries.length <= 1) {
+    return { tangentOffset: 0, normalOffset: 0, collisionCount: 1 };
+  }
+
+  const collisionIndex = closeEntries.findIndex(
+    (candidate) => candidate.player.id === playerId,
+  );
+  const activeSlots = STADIUM_PACK_SLOTS.slice(0, closeEntries.length);
+  const center = activeSlots.reduce(
+    (sum, slot) => ({
+      tangentOffset: sum.tangentOffset + slot.tangentOffset,
+      normalOffset: sum.normalOffset + slot.normalOffset,
+    }),
+    { tangentOffset: 0, normalOffset: 0 },
+  );
+  const slot = activeSlots[Math.max(0, collisionIndex)]!;
+  return {
+    tangentOffset:
+      slot.tangentOffset - center.tangentOffset / activeSlots.length,
+    normalOffset: slot.normalOffset - center.normalOffset / activeSlots.length,
+    collisionCount: closeEntries.length,
+  };
+}
+
+function circularProgressDistance(first: number, second: number): number {
+  const distance = Math.abs(first - second);
+  return Math.min(distance, 1 - distance);
+}
+
+function EndRaceButton({
+  busy,
+  onEnd,
+  label = "경기 종료",
+  busyLabel = "종료하는 중…",
+  confirmation = "현재 순위로 경기를 종료하고 결과 화면으로 이동할까요?",
+}: {
+  busy: boolean;
+  onEnd: () => void;
+  label?: string;
+  busyLabel?: string;
+  confirmation?: string;
+}) {
   const [confirming, setConfirming] = useState(false);
 
   useEffect(() => {
-    if (!confirming) return;
-    const timer = window.setTimeout(() => setConfirming(false), 10_000);
-    return () => window.clearTimeout(timer);
-  }, [confirming]);
+    if (busy) setConfirming(false);
+  }, [busy]);
 
   return (
-    <button
-      className={`end-race-button ${confirming ? "is-confirming" : ""}`}
-      disabled={busy}
-      onClick={() => {
-        if (!confirming) {
-          setConfirming(true);
-          return;
-        }
-        setConfirming(false);
-        onEnd();
-      }}
-    >
-      {busy ? "종료하는 중…" : confirming ? "한 번 더 눌러 종료" : "경기 종료"}
-    </button>
+    <div className="end-race-control">
+      <button
+        className="end-race-button"
+        disabled={busy}
+        aria-expanded={confirming}
+        onClick={() => setConfirming(true)}
+      >
+        {busy ? busyLabel : label}
+      </button>
+      {confirming && !busy && (
+        <div
+          className="end-race-confirmation"
+          role="alertdialog"
+          aria-label={`${label} 확인`}
+        >
+          <p>{confirmation}</p>
+          <div>
+            <button
+              className="end-race-cancel"
+              type="button"
+              onClick={() => setConfirming(false)}
+            >
+              취소
+            </button>
+            <button
+              className="end-race-confirm"
+              type="button"
+              onClick={() => {
+                setConfirming(false);
+                onEnd();
+              }}
+            >
+              {label}
+            </button>
+          </div>
+        </div>
+      )}
+    </div>
   );
 }
 
@@ -957,6 +1680,12 @@ function Finish({
 }) {
   const winner =
     room.players.find((player) => player.finishPlace === 1) ?? room.players[0];
+  const manuallyEnded = room.finishReason === "host_ended";
+  const tiedLeaders = manuallyEnded
+    ? room.players.filter(
+        (player) => player.beatCount === (winner?.beatCount ?? 0),
+      )
+    : [];
   return (
     <section className="finish page-enter">
       <p className="eyebrow">경기 종료</p>
@@ -965,17 +1694,54 @@ function Finish({
           <HeartSolid />
         </span>
         <h1>
-          {winner?.nickname}
-          <br />
-          심장이 먼저 도착했습니다.
+          {manuallyEnded && tiedLeaders.length > 1 ? (
+            <>
+              {tiedLeaders.length}
+              {room.mode === "relay" ? "팀" : "명"}이 공동 선두로
+              <br />
+              경기를 마쳤습니다.
+            </>
+          ) : (
+            <>
+              {winner?.nickname}
+              <br />
+              {manuallyEnded
+                ? room.mode === "relay"
+                  ? "팀이 선두로 경기를 마쳤습니다."
+                  : "심장이 선두로 경기를 마쳤습니다."
+                : room.mode === "relay"
+                  ? "팀이 바톤을 먼저 연결했습니다."
+                  : "심장이 먼저 도착했습니다."}
+            </>
+          )}
         </h1>
-        <p>{winner?.beatCount ?? room.finishBeats}번의 박동으로 완주</p>
+        <p>
+          {manuallyEnded ? (
+            <>
+              {winner?.beatCount ?? 0}번의 박동에서 경기를 종료했습니다.
+              {room.mode === "relay" && winner?.relay
+                ? ` · 팀별 ${winner.relay.runners.length}명의 주자`
+                : ""}
+            </>
+          ) : room.mode === "relay" && winner?.relay ? (
+            <>
+              {winner.relay.runners.length}명의 주자가 {winner.beatCount}번의
+              박동으로 완주
+            </>
+          ) : (
+            <>{winner?.beatCount ?? room.finishBeats}번의 박동으로 완주</>
+          )}
+        </p>
       </div>
       <ol className="ranking-list">
         {room.players.map((player, index) => (
           <li key={player.id}>
             <span className="ranking-place">
-              {player.finishPlace ?? index + 1}
+              {manuallyEnded
+                ? room.players.filter(
+                    (candidate) => candidate.beatCount > player.beatCount,
+                  ).length + 1
+                : (player.finishPlace ?? index + 1)}
             </span>
             <strong>{player.nickname}</strong>
             <span>{player.beatCount} 박동</span>
@@ -1054,15 +1820,15 @@ function measurementLabel(
   return "측정 시작 전";
 }
 
-function loadSession(): HostSession | null {
+function loadSession(storageKey: string): HostSession | null {
   try {
-    const value = localStorage.getItem(STORAGE_KEY);
+    const value = localStorage.getItem(storageKey);
     return value ? (JSON.parse(value) as HostSession) : null;
   } catch {
     return null;
   }
 }
 
-function clearSession() {
-  localStorage.removeItem(STORAGE_KEY);
+function clearSession(storageKey: string) {
+  localStorage.removeItem(storageKey);
 }

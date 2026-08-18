@@ -91,10 +91,18 @@ function HeartRaceApp() {
     useState<PpgCameraDeviceInfo | null>(null);
 
   roomRef.current = game.room;
+  const ownPlayer =
+    game.room && game.session
+      ? findPlayer(game.room, game.session.playerId)
+      : undefined;
 
   const onBeat = useCallback(
     (beat: PpgBeat) => {
       if (roomRef.current?.phase !== "racing") return;
+      const currentPlayer = roomRef.current.players.find(
+        (player) => player.id === game.session?.playerId,
+      );
+      if (currentPlayer?.relay?.status === "handoff") return;
       sequenceRef.current += 1;
       const event: BeatEvent = {
         id: `${Date.now().toString(36)}-${sequenceRef.current.toString(36)}-${Math.random().toString(36).slice(2, 8)}`,
@@ -108,7 +116,7 @@ function HeartRaceApp() {
       };
       game.sendBeat(event);
     },
-    [game.sendBeat],
+    [game.sendBeat, game.session?.playerId],
   );
 
   useEffect(() => {
@@ -131,6 +139,15 @@ function HeartRaceApp() {
     onBeat,
   });
   heartRateStateRef.current = heartRate.state;
+
+  const handoffEndsAt = ownPlayer?.relay?.handoffEndsAt ?? null;
+  useEffect(() => {
+    if (handoffEndsAt === null) return;
+    // 사람 사이에는 카메라 세션을 유지해 플래시 재점등 지연을 피하되,
+    // 이전 주자의 cadence와 보간 상태를 완전히 버립니다.
+    heartRate.reset();
+    game.resetBeatDelivery();
+  }, [game.resetBeatDelivery, handoffEndsAt, heartRate.reset]);
 
   useEffect(() => {
     if (game.room?.phase === "countdown") {
@@ -273,40 +290,47 @@ function HeartRaceApp() {
                 <CountdownScreen room={game.room} />
               </View>
             )}
-            {game.room.phase === "racing" && (
-              <View style={styles.activePhaseOverlay}>
-                <RaceScreen
-                  room={game.room}
-                  player={findPlayer(game.room, game.session.playerId)}
-                  connected={game.connected}
-                  measurement={heartRate.state}
-                  beatCount={game.lastOwnBeat?.beatCount ?? 0}
-                  accent={game.lastOwnBeat?.accent ?? false}
-                  beatDelivery={game.beatDelivery}
-                  source={source}
-                  simulatorBpm={simulatorBpm}
-                  onSimulatorBpm={setSimulatorBpm}
-                  onShareDiagnostics={sharePpgTrace}
-                  onLeave={() => {
-                    Alert.alert(
-                      "경기에서 나갈까요?",
-                      "현재 경기의 진행 기록은 사라집니다.",
-                      [
-                        { text: "계속 경기하기", style: "cancel" },
-                        {
-                          text: "경기 나가기",
-                          style: "destructive",
-                          onPress: () => {
-                            heartRate.reset();
-                            game.leave();
+            {game.room.phase === "racing" &&
+              ownPlayer?.relay?.status === "handoff" && (
+                <View style={styles.activePhaseOverlay}>
+                  <HandoffScreen room={game.room} player={ownPlayer} />
+                </View>
+              )}
+            {game.room.phase === "racing" &&
+              ownPlayer?.relay?.status !== "handoff" && (
+                <View style={styles.activePhaseOverlay}>
+                  <RaceScreen
+                    room={game.room}
+                    player={ownPlayer}
+                    connected={game.connected}
+                    measurement={heartRate.state}
+                    beatCount={game.lastOwnBeat?.beatCount ?? 0}
+                    accent={game.lastOwnBeat?.accent ?? false}
+                    beatDelivery={game.beatDelivery}
+                    source={source}
+                    simulatorBpm={simulatorBpm}
+                    onSimulatorBpm={setSimulatorBpm}
+                    onShareDiagnostics={sharePpgTrace}
+                    onLeave={() => {
+                      Alert.alert(
+                        "경기에서 나갈까요?",
+                        "현재 경기의 진행 기록은 사라집니다.",
+                        [
+                          { text: "계속 경기하기", style: "cancel" },
+                          {
+                            text: "경기 나가기",
+                            style: "destructive",
+                            onPress: () => {
+                              heartRate.reset();
+                              game.leave();
+                            },
                           },
-                        },
-                      ],
-                    );
-                  }}
-                />
-              </View>
-            )}
+                        ],
+                      );
+                    }}
+                  />
+                </View>
+              )}
           </View>
         )}
       </View>
@@ -392,7 +416,7 @@ function JoinScreen({
     if (roomCode.length !== 4)
       return setError("네 자리 방 코드를 입력해 주세요.");
     if (!nickname.trim())
-      return setError("경기에 사용할 닉네임을 입력해 주세요.");
+      return setError("개인 이름 또는 팀 이름을 입력해 주세요.");
     setBusy(true);
     setError(null);
     try {
@@ -469,14 +493,14 @@ function JoinScreen({
               />
             </View>
             <View style={styles.inputGroup}>
-              <Text style={styles.inputLabel}>닉네임</Text>
+              <Text style={styles.inputLabel}>참가 이름</Text>
               <TextInput
                 ref={nicknameRef}
-                accessibilityLabel="닉네임"
+                accessibilityLabel="개인 이름 또는 팀 이름"
                 autoCapitalize="none"
                 autoCorrect={false}
                 maxLength={12}
-                placeholder="나의 이름"
+                placeholder="나의 이름 또는 팀 이름"
                 placeholderTextColor="#B6B6B3"
                 returnKeyType="go"
                 style={styles.textInput}
@@ -520,6 +544,7 @@ function JoinScreen({
 
 function MeasurementScreen({
   room,
+  player,
   nickname,
   connected,
   measurement,
@@ -563,6 +588,7 @@ function MeasurementScreen({
   onLeave: () => void;
 }) {
   const readyHapticRef = useRef(false);
+  const activeRunner = player?.relay?.runners[player.relay.activeRunnerIndex];
   useEffect(() => {
     if (measurement.ready && !readyHapticRef.current) {
       readyHapticRef.current = true;
@@ -580,6 +606,20 @@ function MeasurementScreen({
         <Text style={styles.headerRoom}>방 {room.code}</Text>
         <ConnectionDot connected={connected} />
       </View>
+
+      {activeRunner && (
+        <View style={styles.relayRunnerBanner}>
+          <View
+            style={[
+              styles.relayRunnerDot,
+              { backgroundColor: activeRunner.color },
+            ]}
+          />
+          <Text style={styles.relayRunnerBannerText}>
+            {nickname} · {activeRunner.name}
+          </Text>
+        </View>
+      )}
 
       <View style={styles.measurementMain}>
         <View style={styles.cameraStage}>
@@ -686,7 +726,9 @@ function MeasurementScreen({
               : !cameraPermission && source === "camera"
                 ? "설정에서 카메라 접근을 허용한 뒤 앱으로 돌아와 주세요."
                 : measurement.ready
-                  ? `${nickname}님의 심장이 경기장에 연결됐습니다.`
+                  ? activeRunner
+                    ? `${activeRunner.name}의 심장이 ${nickname} 팀에 연결됐습니다.`
+                    : `${nickname}님의 심장이 경기장에 연결됐습니다.`
                   : measurement.fingerDetected
                     ? measurement.diagnostics?.exposure === "saturated"
                       ? "손가락 힘을 조금 빼고 카메라 위에 가볍게 유지해 주세요."
@@ -821,6 +863,75 @@ function CountdownScreen({ room }: { room: RoomSnapshot }) {
   );
 }
 
+function HandoffScreen({
+  room,
+  player,
+}: {
+  room: RoomSnapshot;
+  player: PlayerSnapshot;
+}) {
+  const relay = player.relay;
+  const [clockOffset] = useState(() => room.serverNow - Date.now());
+  const [now, setNow] = useState(() => Date.now() + clockOffset);
+  const scale = useRef(new Animated.Value(0.86)).current;
+  const handoffEndsAt = relay?.handoffEndsAt ?? now;
+  const remaining = Math.max(0, handoffEndsAt - now);
+  const display = Math.max(1, Math.ceil(remaining / 1_000));
+  const nextRunner = relay?.runners[relay.activeRunnerIndex + 1];
+
+  useEffect(() => {
+    const timer = setInterval(() => setNow(Date.now() + clockOffset), 50);
+    return () => clearInterval(timer);
+  }, [clockOffset]);
+
+  useEffect(() => {
+    scale.stopAnimation();
+    scale.setValue(0.86);
+    Animated.spring(scale, {
+      toValue: 1,
+      damping: 13,
+      stiffness: 190,
+      mass: 0.7,
+      useNativeDriver: true,
+    }).start();
+    void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+  }, [display, scale]);
+
+  return (
+    <SafeAreaView edges={["top", "bottom"]} style={styles.handoffScreen}>
+      <Text style={styles.handoffEyebrow}>BATON TOUCH</Text>
+      <Text style={styles.handoffTitle}>휴대폰을 다음 주자에게 넘겨주세요</Text>
+      <Animated.View
+        style={[
+          styles.handoffCounter,
+          nextRunner && { backgroundColor: nextRunner.color },
+          { transform: [{ scale }] },
+        ]}
+      >
+        <Text style={styles.handoffCounterText}>{display}</Text>
+      </Animated.View>
+      <View style={styles.handoffRunnerCard}>
+        <View
+          style={[
+            styles.handoffRunnerDot,
+            nextRunner && { backgroundColor: nextRunner.color },
+          ]}
+        />
+        <View>
+          <Text style={styles.handoffRunnerLabel}>다음 주자</Text>
+          <Text style={styles.handoffRunnerName}>
+            {nextRunner?.name ?? "다음 주자"}
+          </Text>
+        </View>
+      </View>
+      <Text style={styles.handoffHint}>
+        카메라와 플래시에 새 주자의 손가락을 올려주세요.{"\n"}
+        전환 중의 박동은 경기 거리에 포함되지 않습니다.
+      </Text>
+    </SafeAreaView>
+  );
+}
+
 function RaceScreen({
   room,
   player,
@@ -894,8 +1005,13 @@ function RaceScreen({
     );
   }, [accent, beatCount, beatScale, ringOpacity, ringScale]);
 
-  const displayBeatCount = Math.max(beatCount, player?.beatCount ?? 0);
+  const displayTeamBeatCount = Math.max(beatCount, player?.beatCount ?? 0);
+  const displayBeatCount = player?.relay
+    ? Math.max(0, displayTeamBeatCount - player.relay.legStartBeat)
+    : displayTeamBeatCount;
   const progress = displayBeatCount / room.finishBeats;
+  const activeRunner =
+    player?.relay?.runners[player.relay.activeRunnerIndex] ?? null;
 
   return (
     <SafeAreaView edges={["top", "bottom"]} style={styles.raceScreen}>
@@ -929,7 +1045,9 @@ function RaceScreen({
             { opacity: ringOpacity, transform: [{ scale: ringScale }] },
           ]}
         />
-        <Text style={styles.bpmLabel}>현재 심박수</Text>
+        <Text style={styles.bpmLabel}>
+          {activeRunner ? `${activeRunner.name}의 심박수` : "현재 심박수"}
+        </Text>
         <Animated.Text
           adjustsFontSizeToFit
           numberOfLines={1}
@@ -985,7 +1103,20 @@ function RaceScreen({
           />
         )}
         <View style={styles.progressMeta}>
-          <Text style={styles.progressName}>{player?.nickname ?? "나"}</Text>
+          <View style={styles.progressIdentity}>
+            <Text style={styles.progressName}>
+              {player?.nickname ?? "나"}
+              {activeRunner ? ` · ${activeRunner.name}` : ""}
+            </Text>
+            {player?.relay && (
+              <Text style={styles.progressRelayMeta}>
+                {room.trackMode === "circular"
+                  ? `팀 ${player.relay.lap}바퀴째 · 주자 한 바퀴`
+                  : "직선 트랙 전체"}
+                {` · ${player.relay.completedRunners}/${player.relay.runners.length}명 완료`}
+              </Text>
+            )}
+          </View>
           <Text style={styles.progressCount}>
             <Text style={styles.progressCountStrong}>{displayBeatCount}</Text> /{" "}
             {room.finishBeats} 박동
@@ -995,13 +1126,23 @@ function RaceScreen({
           <View
             style={[
               styles.raceProgressFill,
-              { width: `${Math.min(100, progress * 100)}%` },
+              {
+                width: `${Math.min(100, progress * 100)}%`,
+                ...(activeRunner
+                  ? { backgroundColor: activeRunner.color }
+                  : {}),
+              },
             ]}
           />
           <View
             style={[
               styles.raceProgressHeart,
-              { left: `${Math.min(98, progress * 100)}%` },
+              {
+                left: `${Math.min(98, progress * 100)}%`,
+                ...(activeRunner
+                  ? { backgroundColor: activeRunner.color }
+                  : {}),
+              },
             ]}
           >
             <Text style={styles.progressHeartGlyph}>♥</Text>
@@ -1024,9 +1165,14 @@ function FinishScreen({
   onLeave: () => void;
 }) {
   const player = findPlayer(room, playerId);
-  const place =
-    player?.finishPlace ??
-    room.players.findIndex((item) => item.id === playerId) + 1;
+  const manuallyEnded = room.finishReason === "host_ended";
+  const place = manuallyEnded
+    ? room.players.filter(
+        (item) =>
+          item.beatCount > (player?.beatCount ?? Number.NEGATIVE_INFINITY),
+      ).length + 1
+    : (player?.finishPlace ??
+      room.players.findIndex((item) => item.id === playerId) + 1);
 
   useEffect(() => {
     void Haptics.notificationAsync(
@@ -1045,19 +1191,36 @@ function FinishScreen({
         </View>
         <Text style={styles.finishPlace}>{place}위</Text>
         <Text style={styles.finishTitle}>
-          {place === 1
-            ? "당신의 심장이\n먼저 도착했어요"
-            : "당신의 심장이\n완주했어요"}
+          {manuallyEnded
+            ? place === 1
+              ? room.mode === "relay"
+                ? "우리 팀이 선두로\n경기를 마쳤어요"
+                : "당신의 심장이 선두로\n경기를 마쳤어요"
+              : `${place}위로\n경기를 마쳤어요`
+            : room.mode === "relay"
+              ? place === 1
+                ? "우리 팀의 바톤이\n먼저 도착했어요"
+                : "우리 팀이 함께\n완주했어요"
+              : place === 1
+                ? "당신의 심장이\n먼저 도착했어요"
+                : "당신의 심장이\n완주했어요"}
         </Text>
         <Text style={styles.finishBody}>
-          {player?.beatCount ?? 0}번의 박동으로 결승선을 통과했습니다.
+          {player?.beatCount ?? 0}번의 박동
+          {manuallyEnded
+            ? "에서 호스트가 경기를 종료했습니다."
+            : "으로 결승선을 통과했습니다."}
         </Text>
       </View>
       <View style={styles.finishRanking}>
         {room.players.map((item, index) => (
           <View key={item.id} style={styles.finishRankingRow}>
             <Text style={styles.finishRankingNumber}>
-              {item.finishPlace ?? index + 1}
+              {manuallyEnded
+                ? room.players.filter(
+                    (candidate) => candidate.beatCount > item.beatCount,
+                  ).length + 1
+                : (item.finishPlace ?? index + 1)}
             </Text>
             <Text
               style={[
@@ -1290,6 +1453,8 @@ function beatDeliveryReasonLabel(reason: BeatDeliveryReason): string {
       return "박동 간격을 다시 확인하고 있습니다";
     case "not_racing":
       return "경기 시작 신호와 동기화하는 중입니다";
+    case "handoff":
+      return "다음 주자에게 바톤을 전달하고 있습니다";
     case "offline":
     case "timeout":
     case "server_error":
@@ -1324,6 +1489,22 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "space-between",
+  },
+  relayRunnerBanner: {
+    alignSelf: "center",
+    minHeight: 34,
+    paddingHorizontal: 13,
+    borderRadius: 17,
+    backgroundColor: colors.faint,
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 8,
+  },
+  relayRunnerDot: { width: 8, height: 8, borderRadius: 4 },
+  relayRunnerBannerText: {
+    color: colors.ink,
+    fontFamily: fonts.semibold,
+    fontSize: 12,
   },
   wordmark: {
     color: colors.ink,
@@ -1607,6 +1788,80 @@ const styles = StyleSheet.create({
     position: "absolute",
     bottom: 52,
   },
+  handoffScreen: {
+    flex: 1,
+    paddingHorizontal: 28,
+    backgroundColor: colors.paper,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  handoffEyebrow: {
+    color: colors.muted,
+    fontFamily: fonts.semibold,
+    fontSize: 12,
+    letterSpacing: 1.8,
+    marginBottom: 14,
+  },
+  handoffTitle: {
+    maxWidth: 320,
+    color: colors.ink,
+    fontFamily: fonts.bold,
+    fontSize: 30,
+    lineHeight: 38,
+    letterSpacing: -1.2,
+    textAlign: "center",
+  },
+  handoffCounter: {
+    width: 176,
+    height: 176,
+    marginVertical: 34,
+    borderRadius: 88,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  handoffCounterText: {
+    color: colors.paper,
+    fontFamily: fonts.bold,
+    fontSize: 104,
+    lineHeight: 116,
+    fontVariant: ["tabular-nums"],
+  },
+  handoffRunnerCard: {
+    minWidth: 210,
+    paddingHorizontal: 20,
+    paddingVertical: 14,
+    borderWidth: 1,
+    borderColor: colors.line,
+    borderRadius: 18,
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 13,
+  },
+  handoffRunnerDot: {
+    width: 16,
+    height: 16,
+    borderRadius: 8,
+    backgroundColor: colors.ink,
+  },
+  handoffRunnerLabel: {
+    color: colors.muted,
+    fontFamily: fonts.medium,
+    fontSize: 11,
+  },
+  handoffRunnerName: {
+    marginTop: 2,
+    color: colors.ink,
+    fontFamily: fonts.bold,
+    fontSize: 18,
+  },
+  handoffHint: {
+    marginTop: 24,
+    color: colors.muted,
+    fontFamily: fonts.regular,
+    fontSize: 13,
+    lineHeight: 20,
+    textAlign: "center",
+  },
 
   raceScreen: { flex: 1, paddingHorizontal: 24, backgroundColor: colors.paper },
   raceTopBar: {
@@ -1696,7 +1951,13 @@ const styles = StyleSheet.create({
     alignItems: "flex-end",
     justifyContent: "space-between",
   },
+  progressIdentity: { flex: 1, paddingRight: 12, gap: 3 },
   progressName: { color: colors.ink, fontFamily: fonts.semibold, fontSize: 15 },
+  progressRelayMeta: {
+    color: colors.muted,
+    fontFamily: fonts.medium,
+    fontSize: 10,
+  },
   progressCount: {
     color: colors.muted,
     fontFamily: fonts.medium,
