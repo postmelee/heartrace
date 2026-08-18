@@ -957,6 +957,9 @@ button {
   align-items: flex-end;
   gap: 24px;
 }
+.end-race-control {
+  position: relative;
+}
 .end-race-button {
   min-height: 44px;
   padding: 0 16px;
@@ -984,14 +987,48 @@ button {
   outline: 3px solid var(--ink);
   outline-offset: 3px;
 }
-.end-race-button.is-confirming {
-  border-color: var(--ink);
-  background: var(--ink);
-  color: #fff;
-}
 .end-race-button:disabled {
   cursor: not-allowed;
   opacity: 0.36;
+}
+.end-race-confirmation {
+  position: absolute;
+  z-index: 30;
+  top: calc(100% + 10px);
+  right: 0;
+  width: min(310px, calc(100vw - 40px));
+  padding: 16px;
+  border: 1px solid #d8d8d3;
+  border-radius: 18px;
+  background: #fff;
+  box-shadow: 0 14px 40px rgb(0 0 0 / 14%);
+}
+.end-race-confirmation p {
+  margin: 0 0 14px;
+  color: #3e3e3b;
+  font-size: 14px;
+  line-height: 1.45;
+}
+.end-race-confirmation > div {
+  display: grid;
+  grid-template-columns: 1fr 1.35fr;
+  gap: 8px;
+}
+.end-race-confirmation button {
+  min-height: 40px;
+  border-radius: 12px;
+  font-weight: 700;
+  cursor: pointer;
+}
+.end-race-cancel {
+  border: 1px solid #d8d8d3;
+  background: #fff;
+  color: #555;
+}
+.end-race-confirm {
+  border: 1px solid var(--ink);
+  background: var(--ink);
+  color: #fff;
 }
 .track-list {
   display: flex;

@@ -63,6 +63,20 @@ async function main(): Promise<void> {
       "가상 주자는 설정한 10박동 뒤 바톤을 전달해야 합니다.",
     );
 
+    const ended = await endRace(host, created);
+    assert(
+      ended.phase === "finished",
+      "호스트 종료 뒤 결과 화면 상태여야 합니다.",
+    );
+    assert(
+      ended.finishReason === "host_ended",
+      "호스트가 끝낸 경기임을 스냅샷에 남겨야 합니다.",
+    );
+    assert(
+      ended.players.every((player) => player.beatCount === 10),
+      "호스트가 종료해도 현재 박동 기록을 보존해야 합니다.",
+    );
+
     const reset = await resetRoom(host, created);
     assert(reset.phase === "lobby", "리셋 뒤 준비 화면으로 돌아가야 합니다.");
     assert(
@@ -106,6 +120,22 @@ function start(
       { roomCode: created.room.code, hostToken: created.hostToken },
       (result) => {
         if (result.ok) resolve();
+        else reject(new Error(result.error));
+      },
+    );
+  });
+}
+
+function endRace(
+  host: GameSocket,
+  created: HostCreateRoomResponse,
+): Promise<RoomSnapshot> {
+  return new Promise((resolve, reject) => {
+    host.emit(
+      "host:end",
+      { roomCode: created.room.code, hostToken: created.hostToken },
+      (result) => {
+        if (result.ok) resolve(result.data.room);
         else reject(new Error(result.error));
       },
     );

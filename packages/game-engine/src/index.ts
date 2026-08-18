@@ -11,6 +11,7 @@ import {
   type AcceptedBeat,
   type BeatEvent,
   type BeatRejectReason,
+  type FinishReason,
   type MeasurementUpdate,
   type PlayerRelaySnapshot,
   type PlayerSnapshot,
@@ -51,6 +52,7 @@ export interface RoomState {
   countdownEndsAt: number | null;
   startedAt: number | null;
   finishedAt: number | null;
+  finishReason: FinishReason | null;
   nextFinishPlace: number;
 }
 
@@ -101,6 +103,7 @@ export function createRoomState(input: {
     countdownEndsAt: null,
     startedAt: null,
     finishedAt: null,
+    finishReason: null,
     nextFinishPlace: 1,
   };
 }
@@ -212,6 +215,7 @@ export function startCountdown(room: RoomState, now: number): number {
   }
 
   resetRaceProgress(room);
+  room.finishReason = null;
   room.phase = "countdown";
   // 경기용 카메라가 다시 마운트되는 동안에는 '준비'를 보여주고, 그 뒤
   // 3·2·1이 각각 온전히 1초씩 보이도록 2.2초의 준비 시간을 둡니다.
@@ -226,11 +230,22 @@ export function beginRace(room: RoomState, now: number): void {
   room.countdownEndsAt = null;
 }
 
+export function endRace(room: RoomState, now: number): void {
+  if (room.phase !== "racing") {
+    throw new Error("진행 중인 경기만 종료할 수 있습니다.");
+  }
+  room.phase = "finished";
+  room.countdownEndsAt = null;
+  room.finishedAt = now;
+  room.finishReason = "host_ended";
+}
+
 export function resetRoom(room: RoomState): void {
   room.phase = "lobby";
   room.countdownEndsAt = null;
   room.startedAt = null;
   room.finishedAt = null;
+  room.finishReason = null;
   resetRaceProgress(room);
   for (const player of room.players.values()) {
     player.ready = false;
@@ -369,6 +384,7 @@ export function acceptBeat(
   if (raceFinished) {
     room.phase = "finished";
     room.finishedAt = acceptedAt;
+    room.finishReason = "completed";
   }
 
   return {
@@ -461,6 +477,7 @@ export function toSnapshot(room: RoomState): RoomSnapshot {
     countdownEndsAt: room.countdownEndsAt,
     startedAt: room.startedAt,
     finishedAt: room.finishedAt,
+    finishReason: room.finishReason,
   };
 }
 

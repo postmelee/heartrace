@@ -133,6 +133,18 @@ function HostApp({ demo = false }: { demo?: boolean }) {
     });
   }, [session]);
 
+  const endRace = useCallback(() => {
+    if (!session || !socketRef.current) return;
+    setBusy(true);
+    setError(null);
+    socketRef.current.emit("host:end", session, (result) => {
+      setBusy(false);
+      if (!result.ok) return setError(result.error);
+      setRoom(result.data.room);
+      setBeatEffects({});
+    });
+  }, [session]);
+
   const removePlayer = useCallback(
     (playerId: string) => {
       if (!session || !socketRef.current) return;
@@ -200,7 +212,7 @@ function HostApp({ demo = false }: { demo?: boolean }) {
           room={room}
           beatEffects={beatEffects}
           busy={busy}
-          onEnd={resetRace}
+          onEnd={endRace}
         />
       )}
       {room.phase === "finished" && (
@@ -1092,7 +1104,13 @@ function Countdown({
     <section className="countdown" aria-live="assertive">
       {!readOnly && (
         <div className="countdown-end-control">
-          <EndRaceButton busy={busy} onEnd={onEnd} />
+          <EndRaceButton
+            busy={busy}
+            onEnd={onEnd}
+            label="출발 취소"
+            busyLabel="취소하는 중…"
+            confirmation="출발을 취소하고 준비 화면으로 돌아갈까요?"
+          />
         </div>
       )}
       <p>손가락을 그대로 유지하세요</p>
@@ -1588,30 +1606,64 @@ function circularProgressDistance(first: number, second: number): number {
   return Math.min(distance, 1 - distance);
 }
 
-function EndRaceButton({ busy, onEnd }: { busy: boolean; onEnd: () => void }) {
+function EndRaceButton({
+  busy,
+  onEnd,
+  label = "경기 종료",
+  busyLabel = "종료하는 중…",
+  confirmation = "현재 순위로 경기를 종료하고 결과 화면으로 이동할까요?",
+}: {
+  busy: boolean;
+  onEnd: () => void;
+  label?: string;
+  busyLabel?: string;
+  confirmation?: string;
+}) {
   const [confirming, setConfirming] = useState(false);
 
   useEffect(() => {
-    if (!confirming) return;
-    const timer = window.setTimeout(() => setConfirming(false), 10_000);
-    return () => window.clearTimeout(timer);
-  }, [confirming]);
+    if (busy) setConfirming(false);
+  }, [busy]);
 
   return (
-    <button
-      className={`end-race-button ${confirming ? "is-confirming" : ""}`}
-      disabled={busy}
-      onClick={() => {
-        if (!confirming) {
-          setConfirming(true);
-          return;
-        }
-        setConfirming(false);
-        onEnd();
-      }}
-    >
-      {busy ? "종료하는 중…" : confirming ? "한 번 더 눌러 종료" : "경기 종료"}
-    </button>
+    <div className="end-race-control">
+      <button
+        className="end-race-button"
+        disabled={busy}
+        aria-expanded={confirming}
+        onClick={() => setConfirming(true)}
+      >
+        {busy ? busyLabel : label}
+      </button>
+      {confirming && !busy && (
+        <div
+          className="end-race-confirmation"
+          role="alertdialog"
+          aria-label={`${label} 확인`}
+        >
+          <p>{confirmation}</p>
+          <div>
+            <button
+              className="end-race-cancel"
+              type="button"
+              onClick={() => setConfirming(false)}
+            >
+              취소
+            </button>
+            <button
+              className="end-race-confirm"
+              type="button"
+              onClick={() => {
+                setConfirming(false);
+                onEnd();
+              }}
+            >
+              {label}
+            </button>
+          </div>
+        </div>
+      )}
+    </div>
   );
 }
 
@@ -1628,6 +1680,12 @@ function Finish({
 }) {
   const winner =
     room.players.find((player) => player.finishPlace === 1) ?? room.players[0];
+  const manuallyEnded = room.finishReason === "host_ended";
+  const tiedLeaders = manuallyEnded
+    ? room.players.filter(
+        (player) => player.beatCount === (winner?.beatCount ?? 0),
+      )
+    : [];
   return (
     <section className="finish page-enter">
       <p className="eyebrow">경기 종료</p>
@@ -1636,25 +1694,54 @@ function Finish({
           <HeartSolid />
         </span>
         <h1>
-          {winner?.nickname}
-          <br />
-          {room.mode === "relay"
-            ? "팀이 바톤을 먼저 연결했습니다."
-            : "심장이 먼저 도착했습니다."}
+          {manuallyEnded && tiedLeaders.length > 1 ? (
+            <>
+              {tiedLeaders.length}
+              {room.mode === "relay" ? "팀" : "명"}이 공동 선두로
+              <br />
+              경기를 마쳤습니다.
+            </>
+          ) : (
+            <>
+              {winner?.nickname}
+              <br />
+              {manuallyEnded
+                ? room.mode === "relay"
+                  ? "팀이 선두로 경기를 마쳤습니다."
+                  : "심장이 선두로 경기를 마쳤습니다."
+                : room.mode === "relay"
+                  ? "팀이 바톤을 먼저 연결했습니다."
+                  : "심장이 먼저 도착했습니다."}
+            </>
+          )}
         </h1>
         <p>
-          {winner?.beatCount ?? room.finishBeats}번의 박동
-          {room.mode === "relay" && winner?.relay
-            ? ` · ${winner.relay.runners.length}명의 주자`
-            : ""}
-          으로 완주
+          {manuallyEnded ? (
+            <>
+              {winner?.beatCount ?? 0}번의 박동에서 경기를 종료했습니다.
+              {room.mode === "relay" && winner?.relay
+                ? ` · 팀별 ${winner.relay.runners.length}명의 주자`
+                : ""}
+            </>
+          ) : room.mode === "relay" && winner?.relay ? (
+            <>
+              {winner.relay.runners.length}명의 주자가 {winner.beatCount}번의
+              박동으로 완주
+            </>
+          ) : (
+            <>{winner?.beatCount ?? room.finishBeats}번의 박동으로 완주</>
+          )}
         </p>
       </div>
       <ol className="ranking-list">
         {room.players.map((player, index) => (
           <li key={player.id}>
             <span className="ranking-place">
-              {player.finishPlace ?? index + 1}
+              {manuallyEnded
+                ? room.players.filter(
+                    (candidate) => candidate.beatCount > player.beatCount,
+                  ).length + 1
+                : (player.finishPlace ?? index + 1)}
             </span>
             <strong>{player.nickname}</strong>
             <span>{player.beatCount} 박동</span>

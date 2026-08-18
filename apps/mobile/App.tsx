@@ -1165,9 +1165,14 @@ function FinishScreen({
   onLeave: () => void;
 }) {
   const player = findPlayer(room, playerId);
-  const place =
-    player?.finishPlace ??
-    room.players.findIndex((item) => item.id === playerId) + 1;
+  const manuallyEnded = room.finishReason === "host_ended";
+  const place = manuallyEnded
+    ? room.players.filter(
+        (item) =>
+          item.beatCount > (player?.beatCount ?? Number.NEGATIVE_INFINITY),
+      ).length + 1
+    : (player?.finishPlace ??
+      room.players.findIndex((item) => item.id === playerId) + 1);
 
   useEffect(() => {
     void Haptics.notificationAsync(
@@ -1186,23 +1191,36 @@ function FinishScreen({
         </View>
         <Text style={styles.finishPlace}>{place}위</Text>
         <Text style={styles.finishTitle}>
-          {room.mode === "relay"
+          {manuallyEnded
             ? place === 1
-              ? "우리 팀의 바톤이\n먼저 도착했어요"
-              : "우리 팀이 함께\n완주했어요"
-            : place === 1
-              ? "당신의 심장이\n먼저 도착했어요"
-              : "당신의 심장이\n완주했어요"}
+              ? room.mode === "relay"
+                ? "우리 팀이 선두로\n경기를 마쳤어요"
+                : "당신의 심장이 선두로\n경기를 마쳤어요"
+              : `${place}위로\n경기를 마쳤어요`
+            : room.mode === "relay"
+              ? place === 1
+                ? "우리 팀의 바톤이\n먼저 도착했어요"
+                : "우리 팀이 함께\n완주했어요"
+              : place === 1
+                ? "당신의 심장이\n먼저 도착했어요"
+                : "당신의 심장이\n완주했어요"}
         </Text>
         <Text style={styles.finishBody}>
-          {player?.beatCount ?? 0}번의 박동으로 결승선을 통과했습니다.
+          {player?.beatCount ?? 0}번의 박동
+          {manuallyEnded
+            ? "에서 호스트가 경기를 종료했습니다."
+            : "으로 결승선을 통과했습니다."}
         </Text>
       </View>
       <View style={styles.finishRanking}>
         {room.players.map((item, index) => (
           <View key={item.id} style={styles.finishRankingRow}>
             <Text style={styles.finishRankingNumber}>
-              {item.finishPlace ?? index + 1}
+              {manuallyEnded
+                ? room.players.filter(
+                    (candidate) => candidate.beatCount > item.beatCount,
+                  ).length + 1
+                : (item.finishPlace ?? index + 1)}
             </Text>
             <Text
               style={[

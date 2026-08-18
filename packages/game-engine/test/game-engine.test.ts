@@ -6,6 +6,7 @@ import {
   beginRace,
   completeRelayHandoff,
   createRoomState,
+  endRace,
   removePlayer,
   startCountdown,
   updateMeasurement,
@@ -86,6 +87,21 @@ function beat(sequence: number, overrides: Partial<BeatEvent> = {}): BeatEvent {
 }
 
 describe("심박 경주 규칙", () => {
+  it("호스트가 경기 종료 시 현재 기록을 보존하고 수동 종료 사유를 남긴다", () => {
+    const { room } = setupRace(10);
+    acceptBeat(room, "player-1", beat(1), 5_800);
+
+    endRace(room, 6_000);
+
+    expect(room.phase).toBe("finished");
+    expect(room.finishedAt).toBe(6_000);
+    expect(room.finishReason).toBe("host_ended");
+    expect(room.players.get("player-1")?.beatCount).toBe(1);
+    expect(() => endRace(room, 7_000)).toThrow(
+      "진행 중인 경기만 종료할 수 있습니다.",
+    );
+  });
+
   it("허용 범위를 벗어난 팀전 설정을 거부한다", () => {
     expect(() =>
       createRoomState({

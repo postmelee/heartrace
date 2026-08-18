@@ -8,6 +8,7 @@ import {
   acceptBeat,
   addPlayer,
   beginRace,
+  endRace,
   completeRelayHandoff,
   createRoomState,
   removePlayer,
@@ -250,6 +251,22 @@ io.on("connection", (socket) => {
       if (room.demo) prepareDemoPlayers(room);
       emitSnapshot(room);
       return ack({ ok: true, data: { room: toSnapshot(room) } });
+    } catch (error) {
+      return fail(ack, error);
+    }
+  });
+
+  socket.on("host:end", (request, ack) => {
+    try {
+      const room = getHostRoom(request.roomCode, request.hostToken);
+      clearCountdown(room.code);
+      clearRoomRelayHandoffs(room.code);
+      clearDemoSimulation(room.code);
+      endRace(room, Date.now());
+      const snapshot = toSnapshot(room);
+      emitSnapshot(room);
+      io.to(room.code).emit("race:finished", snapshot);
+      return ack({ ok: true, data: { room: snapshot } });
     } catch (error) {
       return fail(ack, error);
     }

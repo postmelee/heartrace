@@ -16,6 +16,7 @@ export const RELAY_RUNNER_COLORS = [
 ] as const;
 
 export type RoomPhase = "lobby" | "countdown" | "racing" | "finished";
+export type FinishReason = "completed" | "host_ended";
 export type RaceMode = "individual" | "relay";
 export type TrackMode = "straight" | "circular";
 export type RelayStatus = "running" | "handoff";
@@ -91,6 +92,7 @@ export interface RoomSnapshot {
   countdownEndsAt: number | null;
   startedAt: number | null;
   finishedAt: number | null;
+  finishReason: FinishReason | null;
 }
 
 export interface BeatEvent {
@@ -196,6 +198,10 @@ export interface ClientToServerEvents {
   "host:start": (
     request: { roomCode: string; hostToken: string },
     ack: Ack<{ countdownEndsAt: number }>,
+  ) => void;
+  "host:end": (
+    request: { roomCode: string; hostToken: string },
+    ack: Ack<{ room: RoomSnapshot }>,
   ) => void;
   "host:reset": (
     request: { roomCode: string; hostToken: string },
