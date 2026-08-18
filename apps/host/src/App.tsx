@@ -806,11 +806,15 @@ function Countdown({
   onEnd: () => void;
   readOnly?: boolean;
 }) {
-  const [now, setNow] = useState(Date.now());
+  const [clockOffset] = useState(() => room.serverNow - Date.now());
+  const [now, setNow] = useState(() => Date.now() + clockOffset);
   useEffect(() => {
-    const timer = window.setInterval(() => setNow(Date.now()), 50);
+    const timer = window.setInterval(
+      () => setNow(Date.now() + clockOffset),
+      50,
+    );
     return () => window.clearInterval(timer);
-  }, []);
+  }, [clockOffset]);
   const remaining = Math.max(0, (room.countdownEndsAt ?? now) - now);
   const display =
     remaining > 3_000

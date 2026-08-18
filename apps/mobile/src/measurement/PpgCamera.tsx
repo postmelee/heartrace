@@ -149,8 +149,29 @@ export function PpgCamera({
   }, [active, hasPermission, onPermission, requestPermission]);
 
   const deliverSample = useCallback(
-    (red: number, green: number, blue: number, timestamp: number) => {
-      onSample({ red, green, blue, timestamp });
+    (
+      red: number,
+      green: number,
+      blue: number,
+      redSpatialStdDev: number,
+      greenSpatialStdDev: number,
+      saturationRatio: number,
+      timestamp: number,
+    ) => {
+      // 손가락을 올린 직후 자동 노출/화이트밸런스가 크게 움직이는 구간은
+      // 실제 심박보다 훨씬 빠른 가짜 peak를 만듭니다. 카메라 보정이 잠긴
+      // 다음 프레임부터만 PPG 처리기에 전달합니다.
+      if (calibrationRef.current === "locked") {
+        onSample({
+          red,
+          green,
+          blue,
+          redSpatialStdDev,
+          greenSpatialStdDev,
+          saturationRatio,
+          timestamp,
+        });
+      }
 
       const controller = cameraRef.current?.controller;
       if (
@@ -257,24 +278,42 @@ export function PpgCamera({
         let red = 0;
         let green = 0;
         let blue = 0;
+        let redSquares = 0;
+        let greenSquares = 0;
+        let saturated = 0;
         let count = 0;
 
         for (let y = startY; y < endY; y += step) {
           const row = y * rowStride;
           for (let x = startX; x < endX; x += step) {
             const offset = row + x * 4;
-            blue += pixels[offset] ?? 0;
-            green += pixels[offset + 1] ?? 0;
-            red += pixels[offset + 2] ?? 0;
+            const pixelBlue = pixels[offset] ?? 0;
+            const pixelGreen = pixels[offset + 1] ?? 0;
+            const pixelRed = pixels[offset + 2] ?? 0;
+            blue += pixelBlue;
+            green += pixelGreen;
+            red += pixelRed;
+            redSquares += pixelRed * pixelRed;
+            greenSquares += pixelGreen * pixelGreen;
+            if (pixelRed >= 250 || pixelGreen >= 250 || pixelBlue >= 250) {
+              saturated += 1;
+            }
             count += 1;
           }
         }
         if (count > 0) {
+          const meanRed = red / count;
+          const meanGreen = green / count;
           scheduleOnRN(
             deliverSample,
-            red / count,
-            green / count,
+            meanRed,
+            meanGreen,
             blue / count,
+            Math.sqrt(Math.max(0, redSquares / count - meanRed * meanRed)),
+            Math.sqrt(
+              Math.max(0, greenSquares / count - meanGreen * meanGreen),
+            ),
+            saturated / count,
             Date.now(),
           );
         }
@@ -288,10 +327,16 @@ export function PpgCamera({
     onRunningChange?.(true);
     const configure = async () => {
       // CameraRef.controller는 onStarted 이후에 준비됩니다. 약간 뒤에 다시
-      // 읽어 declarative torchMode와 별개로 플래시를 확실히 켭니다.
-      await new Promise<void>((resolve) => setTimeout(resolve, 180));
+      // 읽습니다. 이전 화면에서 고정한 노출/화이트밸런스가 물리 카메라에
+      // 남을 수 있으므로 먼저 3A를 연속 자동 모드로 되돌린 뒤 새 접촉
+      // 상태에서 다시 보정합니다.
+      await new Promise<void>((resolve) => setTimeout(resolve, 80));
       const controller = cameraRef.current?.controller;
       if (!controller) return;
+      await controller.resetFocus().catch(() => undefined);
+      await new Promise<void>((resolve) => setTimeout(resolve, 100));
+
+      // declarative torchMode와 별개로 플래시를 확실히 켭니다.
       if (controller.device.hasTorch) {
         await controller.setTorchMode("on");
         onTorchChange?.(true);

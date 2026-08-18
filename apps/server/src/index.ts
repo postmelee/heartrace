@@ -180,12 +180,9 @@ io.on("connection", (socket) => {
     if (!context) return ack({ ok: true, data: { left: true } });
 
     clearPlayerCleanup(context.room.code, context.player.id);
-    if (context.room.phase === "lobby") {
-      removePlayer(context.room, context.player.id);
-    } else {
-      context.player.socketId = null;
-      context.player.connected = false;
-    }
+    // 명시적인 나가기는 네트워크 단절과 달리 재연결을 기다리지 않습니다.
+    // 경기 중이어도 즉시 제거해 앱과 호스트 양쪽에 이전 참가자가 남지 않게 합니다.
+    removePlayer(context.room, context.player.id);
     detachPlayerSocket(socket, context.room.code);
     emitSnapshot(context.room);
     return ack({ ok: true, data: { left: true } });
