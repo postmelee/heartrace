@@ -88,7 +88,7 @@ async function main(): Promise<void> {
         player.relay?.activeRunnerIndex === 1 &&
         player.relay.status === "running",
     ),
-    "두 번째 주자가 각 팀의 마지막 구간을 완주해야 합니다.",
+    "두 번째 주자가 각 팀의 마지막 한 바퀴를 완주해야 합니다.",
   );
   console.log(
     `팀전 스모크 테스트 통과: ${created.room.code}, 2팀 × 2주자 × 10박동`,

@@ -156,7 +156,7 @@ describe("심박 경주 규칙", () => {
     );
   });
 
-  it("구간 완주 뒤 5초 동안 박동을 막고 다음 주자로 전환한다", () => {
+  it("현재 주자 완주 뒤 5초 동안 박동을 막고 다음 주자로 전환한다", () => {
     const { room, firstTeam } = setupRelayRace(10);
     let boundary = acceptBeat(room, firstTeam.id, beat(1), 5_800);
     for (let sequence = 2; sequence <= 10; sequence += 1) {
@@ -240,7 +240,7 @@ describe("심박 경주 규칙", () => {
     expect(firstTeam.distanceRatio).toBe(1);
   });
 
-  it("원형 트랙은 네 주자마다 같은 구간을 다음 바퀴에서 재사용한다", () => {
+  it("원형 트랙은 주자마다 한 바퀴를 완주하고 다음 랩으로 전환한다", () => {
     const { room, firstTeam } = setupRelayRace(10, 5, "circular");
     let sequence = 0;
     let now = 5_000;
@@ -262,8 +262,7 @@ describe("심박 경주 규칙", () => {
 
     expect(firstTeam.relay).toMatchObject({
       activeRunnerIndex: 4,
-      sectorIndex: 0,
-      lap: 2,
+      lap: 5,
       completedRunners: 4,
       legBeatCount: 0,
     });

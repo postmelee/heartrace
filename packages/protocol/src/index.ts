@@ -51,7 +51,6 @@ export interface PlayerRelaySnapshot {
   legDistanceRatio: number;
   teamDistanceRatio: number;
   completedRunners: number;
-  sectorIndex: number;
   lap: number;
 }
 

@@ -1237,22 +1237,6 @@ button {
   letter-spacing: 0.04em;
   text-anchor: middle;
 }
-.stadium-sector-marker {
-  position: absolute;
-  width: 27px;
-  height: 27px;
-  transform: translate(-50%, -50%);
-  border: 2px solid #fff;
-  border-radius: 50%;
-  background: #303034;
-  color: #fff;
-  display: grid;
-  place-items: center;
-  font-size: 10px;
-  font-weight: 800;
-  box-shadow: 0 3px 10px rgb(0 0 0 / 20%);
-  z-index: 8;
-}
 .stadium-racer {
   position: absolute;
   width: 40px;
@@ -1684,11 +1668,6 @@ button {
     top: calc(100% + 4px);
     padding: 2px 4px;
     font-size: 7px;
-  }
-  .stadium-sector-marker {
-    width: 21px;
-    height: 21px;
-    font-size: 8px;
   }
   .stadium-scoreboard {
     grid-template-columns: repeat(2, minmax(0, 1fr));

@@ -1024,7 +1024,7 @@ function Lobby({
             <br />
             {isRelay
               ? room.trackMode === "circular"
-                ? "주자마다 원형 트랙의 한 구간을 달리고, 네 주자마다 다음 바퀴로 이어집니다."
+                ? "주자마다 원형 트랙을 한 바퀴 달린 뒤 다음 주자에게 바톤을 넘깁니다."
                 : "주자마다 직선 트랙 전체를 달린 뒤 다음 주자가 출발합니다."
               : `먼저 ${room.finishBeats}번 뛰는 심장이 우승합니다.`}
           </p>
@@ -1286,7 +1286,7 @@ function StadiumRace({
       <div
         className="stadium-canvas"
         role="img"
-        aria-label="모든 팀이 같은 거리의 중앙 주로를 달리는 네 구간 운동장 트랙"
+        aria-label="모든 팀이 같은 거리의 중앙 주로를 한 바퀴씩 달리는 운동장 트랙"
       >
         <svg viewBox="0 0 1000 520" aria-hidden="true">
           <defs>
@@ -1332,19 +1332,6 @@ function StadiumRace({
             FINISH
           </text>
         </svg>
-
-        {[0, 1, 2, 3].map((sector) => {
-          const marker = stadiumPoint(sector / 4, 0);
-          return (
-            <span
-              className="stadium-sector-marker"
-              key={sector}
-              style={{ left: marker.left, top: marker.top }}
-            >
-              {sector + 1}
-            </span>
-          );
-        })}
 
         {entries.map(({ player, relay, rankingIndex, teamColor, progress }) => {
           const closeEntries = entries.filter(
@@ -1479,7 +1466,7 @@ function stadiumPath(leftCenter: number, rightCenter: number, radius: number) {
 function stadiumRelayProgress(
   relay: NonNullable<PlayerSnapshot["relay"]>,
 ): number {
-  return (relay.sectorIndex + relay.legDistanceRatio) / 4;
+  return relay.legDistanceRatio;
 }
 
 function stadiumPoint(progress: number, offset: number) {

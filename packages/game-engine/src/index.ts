@@ -555,7 +555,6 @@ function createPlayerRelay(
     legDistanceRatio: 0,
     teamDistanceRatio: 0,
     completedRunners: 0,
-    sectorIndex: 0,
     lap: 1,
   };
 }
@@ -570,8 +569,7 @@ function updateRelayProgress(room: RoomState, player: PlayerState): void {
     relay.runners.length,
     Math.floor(player.beatCount / room.finishBeats),
   );
-  relay.sectorIndex = relay.activeRunnerIndex % 4;
-  relay.lap = Math.floor(relay.activeRunnerIndex / 4) + 1;
+  relay.lap = relay.activeRunnerIndex + 1;
 }
 
 function runnerColor(index: number): string {

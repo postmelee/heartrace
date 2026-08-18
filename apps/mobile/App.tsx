@@ -1111,7 +1111,7 @@ function RaceScreen({
             {player?.relay && (
               <Text style={styles.progressRelayMeta}>
                 {room.trackMode === "circular"
-                  ? `${player.relay.sectorIndex + 1}구간 · ${player.relay.lap}바퀴째`
+                  ? `팀 ${player.relay.lap}바퀴째 · 주자 한 바퀴`
                   : "직선 트랙 전체"}
                 {` · ${player.relay.completedRunners}/${player.relay.runners.length}명 완료`}
               </Text>
