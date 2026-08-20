@@ -13,7 +13,13 @@ import {
 import { scheduleOnRN } from "react-native-worklets";
 import type { PpgFrameSample } from "@heartrace/ppg-core";
 
-export type PpgCameraLens = "wide-angle" | "ultra-wide-angle";
+export type PpgCameraLens = "ultra-wide-angle" | "wide-angle" | "telephoto";
+
+const PPG_CAMERA_LENS_ORDER: readonly PpgCameraLens[] = [
+  "ultra-wide-angle",
+  "wide-angle",
+  "telephoto",
+];
 
 export interface PpgCameraLensInfo {
   lens: PpgCameraLens;
@@ -58,6 +64,7 @@ export function PpgCamera({
   const stableExposureChecksRef = useRef(0);
   const exposureLockingRef = useRef(false);
   const whiteBalanceLockedRef = useRef(false);
+  const sessionGenerationRef = useRef(0);
   const calibrationRef = useRef<PpgCameraDeviceInfo["calibration"]>("waiting");
   const { hasPermission, requestPermission } = useCameraPermission();
   const allDevices = useCameraDevices();
@@ -108,6 +115,10 @@ export function PpgCamera({
     whiteBalanceLockedRef.current = false;
   }, [backCamera?.id, initialExposureBias]);
 
+  useEffect(() => {
+    sessionGenerationRef.current += 1;
+  }, [active, backCamera?.id]);
+
   const deviceInfo = useMemo<PpgCameraDeviceInfo>(
     () => ({
       requestedLens: preferredLens,
@@ -117,11 +128,20 @@ export function PpgCamera({
       usingFallback: activeLens !== preferredLens,
       exposureBias,
       calibration,
-      availableLenses: physicalBackCameras.filter(isPpgLens).map((device) => ({
-        lens: device.type,
-        localizedName: device.localizedName,
-        hasTorch: device.hasTorch,
-      })),
+      availableLenses: PPG_CAMERA_LENS_ORDER.flatMap((lens) => {
+        const device = physicalBackCameras.find(
+          (candidate) => candidate.type === lens,
+        );
+        return device && isPpgLens(device)
+          ? [
+              {
+                lens: device.type,
+                localizedName: device.localizedName,
+                hasTorch: device.hasTorch,
+              },
+            ]
+          : [];
+      }),
     }),
     [
       activeLens,
@@ -325,16 +345,26 @@ export function PpgCamera({
 
   const handleCameraStarted = useCallback(() => {
     onRunningChange?.(true);
+    const generation = sessionGenerationRef.current;
+    const expectedDeviceId = backCamera?.id;
+    const currentController = () => {
+      if (sessionGenerationRef.current !== generation) return null;
+      const controller = cameraRef.current?.controller;
+      if (!controller || controller.device.id !== expectedDeviceId) return null;
+      return controller;
+    };
     const configure = async () => {
       // CameraRef.controller는 onStarted 이후에 준비됩니다. 약간 뒤에 다시
       // 읽습니다. 이전 화면에서 고정한 노출/화이트밸런스가 물리 카메라에
       // 남을 수 있으므로 먼저 3A를 연속 자동 모드로 되돌린 뒤 새 접촉
       // 상태에서 다시 보정합니다.
       await new Promise<void>((resolve) => setTimeout(resolve, 80));
-      const controller = cameraRef.current?.controller;
+      let controller = currentController();
       if (!controller) return;
       await controller.resetFocus().catch(() => undefined);
       await new Promise<void>((resolve) => setTimeout(resolve, 100));
+      controller = currentController();
+      if (!controller) return;
 
       // declarative torchMode와 별개로 플래시를 확실히 켭니다.
       if (controller.device.hasTorch) {
@@ -362,7 +392,7 @@ export function PpgCamera({
         "플래시를 켜지 못했습니다. 렌즈를 바꿔 다시 시도해 주세요.",
       );
     });
-  }, [onRunningChange, onTorchChange, onTorchError]);
+  }, [backCamera?.id, onRunningChange, onTorchChange, onTorchError]);
 
   const handleCameraStopped = useCallback(() => {
     onRunningChange?.(false);
@@ -371,6 +401,7 @@ export function PpgCamera({
 
   useEffect(() => {
     return () => {
+      sessionGenerationRef.current += 1;
       void cameraRef.current?.controller
         ?.setTorchMode("off")
         .catch(() => undefined);
@@ -379,7 +410,7 @@ export function PpgCamera({
     };
   }, [onRunningChange, onTorchChange]);
 
-  if (!active || !hasPermission || !backCamera) return null;
+  if (!hasPermission || !backCamera) return null;
 
   return (
     <View
@@ -387,7 +418,6 @@ export function PpgCamera({
       style={visible ? styles.visibleCamera : styles.hiddenCamera}
     >
       <Camera
-        key={backCamera.id}
         ref={cameraRef}
         style={StyleSheet.absoluteFill}
         device={backCamera}
@@ -418,12 +448,20 @@ function collectPhysicalBackCameras(devices: CameraDevice[]): CameraDevice[] {
 function isPpgLens(
   device: CameraDevice,
 ): device is CameraDevice & { type: PpgCameraLens } {
-  return device.type === "wide-angle" || device.type === "ultra-wide-angle";
+  return (
+    device.type === "ultra-wide-angle" ||
+    device.type === "wide-angle" ||
+    device.type === "telephoto"
+  );
 }
 
 function cameraLens(device: CameraDevice | undefined): PpgCameraLens | null {
   if (!device) return null;
-  if (device.type === "wide-angle" || device.type === "ultra-wide-angle") {
+  if (
+    device.type === "ultra-wide-angle" ||
+    device.type === "wide-angle" ||
+    device.type === "telephoto"
+  ) {
     return device.type;
   }
   return null;

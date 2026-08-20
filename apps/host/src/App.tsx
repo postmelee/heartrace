@@ -1,7 +1,13 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { QRCodeSVG } from "qrcode.react";
 import { io, type Socket } from "socket.io-client";
-import { MAX_TEAM_COUNT } from "@heartrace/protocol";
+import {
+  DEFAULT_HANDOFF_DURATION_MS,
+  MAX_HANDOFF_DURATION_MS,
+  MAX_TEAM_COUNT,
+  MIN_HANDOFF_DURATION_MS,
+  RELAY_TEAM_COLORS,
+} from "@heartrace/protocol";
 import type {
   AcceptedBeat,
   ClientToServerEvents,
@@ -552,9 +558,17 @@ function Home({
   const [teamCount, setTeamCount] = useState(2);
   const [runnersPerTeam, setRunnersPerTeam] = useState(3);
   const [legBeats, setLegBeats] = useState<10 | 20 | 30 | 60>(20);
+  const [handoffSecondsInput, setHandoffSecondsInput] = useState(
+    String(DEFAULT_HANDOFF_DURATION_MS / 1_000),
+  );
   const [trackMode, setTrackMode] = useState<"straight" | "circular">(
     "straight",
   );
+  const handoffSeconds = Number(handoffSecondsInput);
+  const handoffSecondsValid =
+    Number.isInteger(handoffSeconds) &&
+    handoffSeconds >= MIN_HANDOFF_DURATION_MS / 1_000 &&
+    handoffSeconds <= MAX_HANDOFF_DURATION_MS / 1_000;
   const createRequest: HostCreateRoomRequest =
     mode === "relay"
       ? {
@@ -562,7 +576,12 @@ function Home({
           mode,
           trackMode,
           demo,
-          relay: { teamCount, runnersPerTeam, legBeats },
+          relay: {
+            teamCount,
+            runnersPerTeam,
+            legBeats,
+            handoffDurationMs: handoffSeconds * 1_000,
+          },
         }
       : { finishBeats: 60, mode };
 
@@ -683,13 +702,36 @@ function Home({
                   ))}
                 </div>
               </div>
+              <label className="time-input-picker">
+                <span>바톤 대기</span>
+                <span className="time-input-control">
+                  <input
+                    type="number"
+                    inputMode="numeric"
+                    min={MIN_HANDOFF_DURATION_MS / 1_000}
+                    max={MAX_HANDOFF_DURATION_MS / 1_000}
+                    step={1}
+                    value={handoffSecondsInput}
+                    aria-invalid={!handoffSecondsValid}
+                    aria-describedby="handoff-duration-help"
+                    onChange={(event) =>
+                      setHandoffSecondsInput(event.currentTarget.value)
+                    }
+                  />
+                  <strong>초</strong>
+                </span>
+                <small id="handoff-duration-help">
+                  {MIN_HANDOFF_DURATION_MS / 1_000}–
+                  {MAX_HANDOFF_DURATION_MS / 1_000}초
+                </small>
+              </label>
             </div>
           )}
         </div>
         <button
           className="primary-button hero-button"
           onClick={() => onCreate(createRequest)}
-          disabled={busy}
+          disabled={busy || (mode === "relay" && !handoffSecondsValid)}
         >
           {busy
             ? "경기장 만드는 중…"
@@ -1120,7 +1162,7 @@ function Lobby({
           <p>
             <strong>
               {isRelay
-                ? `한 팀 ${room.relaySettings?.runnersPerTeam}명 · 주자당 ${room.relaySettings?.legBeats}박동 · 바톤 전환 5초`
+                ? `한 팀 ${room.relaySettings?.runnersPerTeam}명 · 주자당 ${room.relaySettings?.legBeats}박동 · 바톤 전환 ${(room.relaySettings?.handoffDurationMs ?? DEFAULT_HANDOFF_DURATION_MS) / 1_000}초`
                 : "한 번의 박동 = 한 걸음"}
             </strong>
             <br />
@@ -1183,8 +1225,13 @@ function CountdownOverlay({ room }: { room: RoomSnapshot }) {
   return (
     <div className="countdown-overlay" aria-live="assertive">
       <p>손가락을 그대로 유지하세요</p>
-      <div className="countdown-number" key={display}>
-        {display}
+      <div className="countdown-number-slot">
+        <div
+          className={`countdown-number ${display === "준비" ? "is-ready" : ""}`}
+          key={display}
+        >
+          {display}
+        </div>
       </div>
       <span>
         {display === "준비" ? "곧 경기가 시작됩니다" : "심장으로 달릴 시간"}
@@ -1427,7 +1474,7 @@ function StadiumRace({
       ...entry,
       lane,
       teamColor:
-        STADIUM_TEAM_COLORS[lane % STADIUM_TEAM_COLORS.length] ??
+        RELAY_TEAM_COLORS[entry.player.laneIndex % RELAY_TEAM_COLORS.length] ??
         STADIUM_FALLBACK_COLOR,
     }));
   // room.players가 순위 순서이므로 그대로 등수로 씁니다.
@@ -1700,16 +1747,6 @@ const STADIUM_OUTER_RADIUS = 296;
 const STADIUM_MIN_INFIELD_RADIUS = 88;
 const STADIUM_MAX_LANE_WIDTH = 74;
 const STADIUM_FALLBACK_COLOR = "#c04a63";
-// 트랙(#bf673c)과 색조가 겹치지 않도록 주황 계열은 피합니다.
-const STADIUM_TEAM_COLORS = [
-  "#2f5f92",
-  "#d0a017",
-  "#2f7d55",
-  "#6f5aa8",
-  "#177f88",
-  "#b8365c",
-];
-
 interface StadiumTrack {
   laneCount: number;
   laneWidth: number;
