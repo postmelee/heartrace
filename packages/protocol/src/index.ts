@@ -64,11 +64,15 @@ export interface RelayRoomSettings {
 
 export interface PlayerSnapshot {
   id: string;
+  /** 입장 순서로 정해지는 0부터의 고정 레인 번호. 순위가 바뀌어도 유지됩니다. */
+  laneIndex: number;
   nickname: string;
   connected: boolean;
   measurementState: MeasurementState;
   ready: boolean;
   bpm: number | null;
+  /** 경기 중 승인된 박동에서 관측한 가장 높은 BPM. 경기 전에는 null입니다. */
+  maxBpm: number | null;
   signalQuality: number;
   beatCount: number;
   distanceRatio: number;

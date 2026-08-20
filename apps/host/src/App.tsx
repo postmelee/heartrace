@@ -16,6 +16,7 @@ const PUBLIC_URL = import.meta.env.VITE_PUBLIC_URL ?? window.location.origin;
 const IOS_INSTALL_URL = import.meta.env.VITE_IOS_INSTALL_URL ?? "";
 const STORAGE_KEY = "heartrace:host-session";
 const DEMO_STORAGE_KEY = "heartrace:demo-host-session";
+const IMMERSIVE_KEY = "heartrace:immersive";
 
 type GameSocket = Socket<ServerToClientEvents, ClientToServerEvents>;
 
@@ -43,6 +44,9 @@ function HostApp({ demo = false }: { demo?: boolean }) {
     loadSession(storageKey),
   );
   const [error, setError] = useState<string | null>(null);
+  // 로비에서 경기장에 먼저 들어가 트랙을 보여 주는 단계입니다. 서버 phase는 아직 lobby입니다.
+  const [staged, setStaged] = useState(false);
+  const [immersive, setImmersive] = useImmersive();
   const [busy, setBusy] = useState(false);
   const [beatEffects, setBeatEffects] = useState<Record<string, AcceptedBeat>>(
     {},
@@ -121,6 +125,10 @@ function HostApp({ demo = false }: { demo?: boolean }) {
     });
   }, [session]);
 
+  useEffect(() => {
+    if (room && room.phase !== "lobby") setStaged(false);
+  }, [room?.phase]);
+
   const resetRace = useCallback(() => {
     if (!session || !socketRef.current) return;
     setBusy(true);
@@ -187,32 +195,41 @@ function HostApp({ demo = false }: { demo?: boolean }) {
   watchUrl.searchParams.set("room", room.code);
 
   return (
-    <main className="app-shell">
+    <main className={`app-shell ${immersive ? "is-immersive" : ""}`}>
       <TopBar
         connected={connected}
         code={room.code}
         onLeave={leaveRoom}
         watchUrl={watchUrl.toString()}
         demo={room.demo}
+        immersive={immersive}
+        onToggleImmersive={() => setImmersive((current) => !current)}
+        canLeave={room.phase === "lobby" || room.phase === "finished"}
       />
-      {room.phase === "lobby" && (
+      {room.phase !== "lobby" && error && (
+        <ErrorToast message={error} onDismiss={() => setError(null)} />
+      )}
+      {room.phase === "lobby" && !staged && (
         <Lobby
           room={room}
           busy={busy}
           error={error}
-          onStart={startRace}
+          onStart={() => setStaged(true)}
           onRemovePlayer={removePlayer}
         />
       )}
-      {room.phase === "countdown" && (
-        <Countdown room={room} busy={busy} onEnd={resetRace} />
-      )}
-      {room.phase === "racing" && (
+      {((room.phase === "lobby" && staged) ||
+        room.phase === "countdown" ||
+        room.phase === "racing") && (
         <Race
           room={room}
           beatEffects={beatEffects}
           busy={busy}
-          onEnd={endRace}
+          staged={room.phase === "lobby"}
+          countingDown={room.phase === "countdown"}
+          onStart={startRace}
+          onLeaveStage={() => setStaged(false)}
+          onEnd={room.phase === "countdown" ? resetRace : endRace}
         />
       )}
       {room.phase === "finished" && (
@@ -231,6 +248,7 @@ function SpectatorApp() {
   const [connected, setConnected] = useState(false);
   const [room, setRoom] = useState<RoomSnapshot | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [immersive, setImmersive] = useImmersive();
   const [beatEffects, setBeatEffects] = useState<Record<string, AcceptedBeat>>(
     {},
   );
@@ -297,12 +315,16 @@ function SpectatorApp() {
   }
 
   return (
-    <main className="app-shell spectator-shell">
+    <main
+      className={`app-shell spectator-shell ${immersive ? "is-immersive" : ""}`}
+    >
       <TopBar
         connected={connected}
         code={room.code}
         mode="spectator"
         demo={room.demo}
+        immersive={immersive}
+        onToggleImmersive={() => setImmersive((current) => !current)}
       />
       {room.phase === "lobby" && (
         <Lobby
@@ -314,14 +336,12 @@ function SpectatorApp() {
           readOnly
         />
       )}
-      {room.phase === "countdown" && (
-        <Countdown room={room} busy={false} onEnd={() => undefined} readOnly />
-      )}
-      {room.phase === "racing" && (
+      {(room.phase === "countdown" || room.phase === "racing") && (
         <Race
           room={room}
           beatEffects={beatEffects}
           busy={false}
+          countingDown={room.phase === "countdown"}
           onEnd={() => undefined}
           readOnly
         />
@@ -550,10 +570,15 @@ function Home({
     <main className={`home page-enter ${demo ? "is-demo" : ""}`}>
       <div className="home-kicker">
         <LiveDot live={connected} />
-        {demo ? "휴대폰 없는 리허설" : "참여형 운동회"}
+        {demo ? "휴대폰 없는 리허설" : "《ㅊㅊㅊ 운동회》 나를 찾는 운동회"}
+        <PartnerLockup />
       </div>
       <div className="home-copy">
-        <p className="eyebrow">{demo ? "HEART RACE · MOCK" : "HEART RACE"}</p>
+        <p className="display-category">{demo ? "REHEARSAL" : "PHYSICAL"}</p>
+        <p className="session-line">
+          <sup>3</sup> 신체 운동 · <strong>0km 이어달리기</strong>
+          {demo && " · 모의 경기"}
+        </p>
         <h1>
           {demo ? (
             <>
@@ -687,7 +712,7 @@ function Home({
       <p className="edition">
         {demo
           ? "가상 박동은 의료 측정값이 아닙니다."
-          : "전시용 프로토타입 · 2026"}
+          : "《ㅊㅊㅊ 운동회》 2026.08.22 · 누부크"}
       </p>
     </main>
   );
@@ -769,6 +794,29 @@ function SelectPicker({
   );
 }
 
+function useImmersive() {
+  const [immersive, setImmersive] = useState(
+    () => window.localStorage.getItem(IMMERSIVE_KEY) === "1",
+  );
+
+  useEffect(() => {
+    window.localStorage.setItem(IMMERSIVE_KEY, immersive ? "1" : "0");
+  }, [immersive]);
+
+  useEffect(() => {
+    const onKey = (event: KeyboardEvent) => {
+      if (event.key !== "h" && event.key !== "H") return;
+      const target = event.target as HTMLElement | null;
+      if (target && /^(INPUT|TEXTAREA|SELECT)$/.test(target.tagName)) return;
+      setImmersive((current) => !current);
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, []);
+
+  return [immersive, setImmersive] as const;
+}
+
 function TopBar({
   connected,
   code,
@@ -776,6 +824,9 @@ function TopBar({
   watchUrl,
   mode = "host",
   demo = false,
+  immersive = false,
+  onToggleImmersive,
+  canLeave = false,
 }: {
   connected: boolean;
   code: string;
@@ -783,6 +834,9 @@ function TopBar({
   watchUrl?: string;
   mode?: "host" | "spectator";
   demo?: boolean;
+  immersive?: boolean;
+  onToggleImmersive?: () => void;
+  canLeave?: boolean;
 }) {
   const [copied, setCopied] = useState(false);
 
@@ -803,39 +857,74 @@ function TopBar({
   };
 
   return (
-    <header className="top-bar">
-      {onLeave ? (
-        <button className="wordmark" onClick={onLeave} aria-label="처음으로">
-          심장 달리기
+    <>
+      {immersive && onToggleImmersive && (
+        <button
+          className="immersive-handle"
+          type="button"
+          onClick={onToggleImmersive}
+          title="헤더 고정 (H)"
+        >
+          <span aria-hidden="true">⌄</span>
+          <span className="immersive-handle-label">메뉴</span>
         </button>
-      ) : (
-        <a className="wordmark" href="/">
-          심장 달리기
-        </a>
       )}
-      <div className="top-bar-actions">
-        {watchUrl && (
-          <button
-            className={`watch-link-button ${copied ? "is-copied" : ""}`}
-            type="button"
-            onClick={copyWatchUrl}
-          >
-            <LinkIcon />
-            <span>{copied ? "복사됨" : "관전 링크 복사"}</span>
+      <header className="top-bar">
+        {onLeave ? (
+          <button className="wordmark" onClick={onLeave} aria-label="처음으로">
+            <CccMark />
+            <span>0km 이어달리기</span>
           </button>
+        ) : (
+          <a className="wordmark" href="/">
+            <CccMark />
+            <span>0km 이어달리기</span>
+          </a>
         )}
-        <div className="top-room-info">
-          <LiveDot live={connected} />
-          <span>{connected ? "연결됨" : "재연결 중"}</span>
-          <span className="top-divider" />
-          {mode === "spectator" && (
-            <span className="spectator-label">관전 중</span>
+        <div className="top-bar-actions">
+          {watchUrl && (
+            <button
+              className={`watch-link-button ${copied ? "is-copied" : ""}`}
+              type="button"
+              onClick={copyWatchUrl}
+            >
+              <LinkIcon />
+              <span>{copied ? "복사됨" : "관전 링크 복사"}</span>
+            </button>
           )}
-          {demo && <span className="demo-label">MOCK</span>}
-          <span>방 {code}</span>
+          <div className="top-room-info">
+            <LiveDot live={connected} />
+            <span>{connected ? "연결됨" : "재연결 중"}</span>
+            <span className="top-divider" />
+            {mode === "spectator" && (
+              <span className="spectator-label">관전 중</span>
+            )}
+            {demo && <span className="demo-label">MOCK</span>}
+            <span>방 {code}</span>
+          </div>
+          {onLeave && canLeave && (
+            <button className="new-room-button" type="button" onClick={onLeave}>
+              새 방 만들기
+            </button>
+          )}
+          {onToggleImmersive && (
+            <button
+              className={`immersive-toggle ${immersive ? "is-on" : ""}`}
+              type="button"
+              onClick={(event) => {
+                // 포커스가 남아 있으면 :focus-within으로 헤더가 계속 열려 있습니다.
+                event.currentTarget.blur();
+                onToggleImmersive();
+              }}
+              aria-pressed={immersive}
+              title="전시 모드 (H)"
+            >
+              <span>{immersive ? "헤더 고정" : "전시 모드"}</span>
+            </button>
+          )}
         </div>
-      </div>
-    </header>
+      </header>
+    </>
   );
 }
 
@@ -1062,8 +1151,8 @@ function Lobby({
             >
               {allReady
                 ? busy
-                  ? "출발 준비 중…"
-                  : "경기 시작"
+                  ? "입장하는 중…"
+                  : "경기장 입장"
                 : "모두의 측정을 기다리는 중"}
               {allReady && <ArrowIcon />}
             </button>
@@ -1074,17 +1163,8 @@ function Lobby({
   );
 }
 
-function Countdown({
-  room,
-  busy,
-  onEnd,
-  readOnly = false,
-}: {
-  room: RoomSnapshot;
-  busy: boolean;
-  onEnd: () => void;
-  readOnly?: boolean;
-}) {
+// 트랙을 미리 보여준 채로 숫자만 위에 겹칩니다.
+function CountdownOverlay({ room }: { room: RoomSnapshot }) {
   const [clockOffset] = useState(() => room.serverNow - Date.now());
   const [now, setNow] = useState(() => Date.now() + clockOffset);
   useEffect(() => {
@@ -1101,18 +1181,7 @@ function Countdown({
       : String(Math.max(1, Math.ceil(remaining / 1_000)));
 
   return (
-    <section className="countdown" aria-live="assertive">
-      {!readOnly && (
-        <div className="countdown-end-control">
-          <EndRaceButton
-            busy={busy}
-            onEnd={onEnd}
-            label="출발 취소"
-            busyLabel="취소하는 중…"
-            confirmation="출발을 취소하고 준비 화면으로 돌아갈까요?"
-          />
-        </div>
-      )}
+    <div className="countdown-overlay" aria-live="assertive">
       <p>손가락을 그대로 유지하세요</p>
       <div className="countdown-number" key={display}>
         {display}
@@ -1120,7 +1189,7 @@ function Countdown({
       <span>
         {display === "준비" ? "곧 경기가 시작됩니다" : "심장으로 달릴 시간"}
       </span>
-    </section>
+    </div>
   );
 }
 
@@ -1129,12 +1198,20 @@ function Race({
   beatEffects,
   busy,
   onEnd,
+  onStart,
+  onLeaveStage,
+  staged = false,
+  countingDown = false,
   readOnly = false,
 }: {
   room: RoomSnapshot;
   beatEffects: Record<string, AcceptedBeat>;
   busy: boolean;
   onEnd: () => void;
+  onStart?: () => void;
+  onLeaveStage?: () => void;
+  staged?: boolean;
+  countingDown?: boolean;
   readOnly?: boolean;
 }) {
   const leader = useMemo(() => room.players[0], [room.players]);
@@ -1142,33 +1219,86 @@ function Race({
     room.trackMode === "circular" &&
     room.mode === "relay" &&
     room.players.every((player) => player.relay !== null);
+  const overlay = staged ? (
+    <div className="stage-overlay">
+      {!readOnly && (
+        <button
+          className="primary-button stage-start"
+          type="button"
+          onClick={onStart}
+          disabled={busy}
+        >
+          {busy ? "출발 준비 중…" : "경기 시작"}
+          {!busy && <ArrowIcon />}
+        </button>
+      )}
+      <p className="stage-hint">모든 팀이 손가락을 올렸는지 확인하세요</p>
+    </div>
+  ) : countingDown ? (
+    <CountdownOverlay room={room} />
+  ) : null;
   return (
-    <section className={`race page-enter ${isStadiumRace ? "is-stadium" : ""}`}>
+    <section
+      className={`race page-enter ${isStadiumRace ? "is-stadium" : ""} ${
+        countingDown || staged ? "is-counting" : ""
+      }`}
+    >
       <div className="race-heading">
         <div>
           <p className="eyebrow">
             <span className="recording-dot" />{" "}
-            {room.demo ? "모의 경기 중" : "경기 중"}
+            {staged
+              ? "출발 대기"
+              : countingDown
+                ? "출발 준비"
+                : room.demo
+                  ? "모의 경기 중"
+                  : "경기 중"}
           </p>
-          <h1>
-            {room.demo
-              ? "가상 심장이 달리고 있습니다"
-              : "심장이 달리고 있습니다"}
-          </h1>
+          {!isStadiumRace && (
+            <h1>
+              {room.demo
+                ? "가상 심장이 달리고 있습니다"
+                : "심장이 달리고 있습니다"}
+            </h1>
+          )}
         </div>
         <div className="race-actions">
-          <div className="leader-copy">
-            <span>현재 선두</span>
-            <strong>{leader?.nickname ?? "—"}</strong>
-          </div>
-          {!readOnly && <EndRaceButton busy={busy} onEnd={onEnd} />}
+          {!countingDown && !staged && (
+            <div className="leader-copy">
+              <span>현재 선두</span>
+              <strong>{leader?.nickname ?? "—"}</strong>
+            </div>
+          )}
+          {!readOnly &&
+            (staged ? (
+              <button
+                className="end-race-button"
+                type="button"
+                onClick={onLeaveStage}
+                disabled={busy}
+              >
+                대기 화면으로
+              </button>
+            ) : countingDown ? (
+              <EndRaceButton
+                busy={busy}
+                onEnd={onEnd}
+                label="출발 취소"
+                busyLabel="취소하는 중…"
+                confirmation="출발을 취소하고 준비 화면으로 돌아갈까요?"
+              />
+            ) : (
+              <EndRaceButton busy={busy} onEnd={onEnd} />
+            ))}
         </div>
       </div>
 
       {isStadiumRace ? (
-        <StadiumRace room={room} beatEffects={beatEffects} />
+        <StadiumRace room={room} beatEffects={beatEffects} overlay={overlay} />
       ) : (
         <div className="track-list">
+          {overlay}
           {room.players.map((player, index) => {
             const beat = beatEffects[player.id];
             const effectKey = beat?.beatId ?? "initial";
@@ -1227,8 +1357,10 @@ function Race({
                     }}
                     key={`${runnerKey}:${effectKey}`}
                   >
-                    <span className="racer-pulse" />
-                    <HeartSolid />
+                    <span className="racer-beat">
+                      <HeartSolid />
+                      {relay && <strong>{relay.activeRunnerIndex + 1}</strong>}
+                    </span>
                   </div>
                   {relay?.status === "handoff" && nextRunner && (
                     <div
@@ -1241,7 +1373,10 @@ function Race({
                       }
                       aria-label={`${nextRunner.name} 출발 준비`}
                     >
-                      <HeartSolid />
+                      <span className="racer-beat">
+                        <HeartSolid />
+                        <strong>{relay.activeRunnerIndex + 2}</strong>
+                      </span>
                     </div>
                   )}
                   <span className="finish-line">결승</span>
@@ -1266,7 +1401,8 @@ function Race({
         </div>
       )}
       <p className="race-instruction">
-        휴대폰 화면의 심박수를 보며, 자신의 심장을 움직여 보세요.
+        경쟁과 승패보다, 함께 움직이는 시간입니다. 휴대폰 화면의 심박수를 보며
+        자신의 심장을 움직여 보세요.
       </p>
     </section>
   );
@@ -1275,335 +1411,419 @@ function Race({
 function StadiumRace({
   room,
   beatEffects,
+  overlay = null,
 }: {
   room: RoomSnapshot;
   beatEffects: Record<string, AcceptedBeat>;
+  overlay?: React.ReactNode;
 }) {
-  const teamColorById = new Map(
-    [...room.players]
-      .sort((first, second) => first.id.localeCompare(second.id))
-      .map((player, index) => [
-        player.id,
-        STADIUM_TEAM_COLORS[index % STADIUM_TEAM_COLORS.length],
-      ]),
+  // room.players는 순위 순서라 매 박동마다 뒤바뀝니다. 레인은 입장 순서로 고정합니다.
+  const lanes = room.players
+    .flatMap((player) =>
+      player.relay ? [{ player, relay: player.relay }] : [],
+    )
+    .sort((first, second) => first.player.laneIndex - second.player.laneIndex)
+    .map((entry, lane) => ({
+      ...entry,
+      lane,
+      teamColor:
+        STADIUM_TEAM_COLORS[lane % STADIUM_TEAM_COLORS.length] ??
+        STADIUM_FALLBACK_COLOR,
+    }));
+  // room.players가 순위 순서이므로 그대로 등수로 씁니다.
+  const rankByPlayerId = new Map(
+    room.players.map((player, rank) => [player.id, rank]),
   );
-  const entries = room.players.flatMap((player, rankingIndex) => {
-    if (!player.relay) return [];
-    return [
-      {
-        player,
-        relay: player.relay,
-        rankingIndex,
-        teamColor: teamColorById.get(player.id) ?? STADIUM_TEAM_COLORS[0],
-        progress: stadiumRelayProgress(player.relay),
-      },
-    ];
-  });
+  const track = stadiumTrack(lanes.length);
+  const markerSize = track.laneWidth * 0.92;
+  const handoffGap = markerSize * 0.66;
+  const laneLabelSize = Math.min(track.laneWidth * 0.46, 30);
+  const finishPatternId = `finish-check-${room.code}`;
+  const infieldCenterX = (STADIUM_LEFT_CENTER + STADIUM_RIGHT_CENTER) / 2;
 
   return (
     <div className="stadium-race">
-      <div
-        className="stadium-canvas"
-        role="img"
-        aria-label="모든 팀이 같은 거리의 중앙 주로를 한 바퀴씩 달리는 운동장 트랙"
+      <ol
+        className="rank-board"
+        style={{ height: `calc(var(--rank-row) * ${lanes.length})` }}
       >
-        <svg viewBox="0 0 1000 520" aria-hidden="true">
+        {lanes.map(({ player, lane, teamColor }) => {
+          const rank = rankByPlayerId.get(player.id) ?? lane;
+          return (
+            <li
+              key={player.id}
+              style={
+                {
+                  "--team-color": teamColor,
+                  transform: `translateY(calc(var(--rank-row) * ${rank}))`,
+                } as React.CSSProperties
+              }
+            >
+              <span className="rank-board-place">{rank + 1}</span>
+              <strong>{player.nickname}</strong>
+            </li>
+          );
+        })}
+      </ol>
+
+      <div className="stadium-field">
+        <svg
+          viewBox={`0 0 ${STADIUM_VIEW_WIDTH} ${STADIUM_VIEW_HEIGHT}`}
+          role="img"
+          aria-label={`팀마다 고정된 레인을 한 바퀴씩 달리는 운동장 트랙. ${lanes
+            .map(
+              (entry) =>
+                `${entry.lane + 1}레인 ${entry.player.nickname} ${Math.round(
+                  entry.relay.legDistanceRatio * 100,
+                )}퍼센트`,
+            )
+            .join(", ")}`}
+        >
           <defs>
             <pattern
-              id={`finish-check-${room.code}`}
+              id={finishPatternId}
               width="14"
               height="14"
               patternUnits="userSpaceOnUse"
             >
-              <rect width="14" height="14" fill="#fff" />
-              <rect width="7" height="7" fill="#111" />
-              <rect x="7" y="7" width="7" height="7" fill="#111" />
+              <rect width="14" height="14" fill="#fdfbf6" />
+              <rect width="7" height="7" fill="#2a2119" />
+              <rect x="7" y="7" width="7" height="7" fill="#2a2119" />
             </pattern>
           </defs>
-          <path className="stadium-outer" d={stadiumPath(235, 765, 215)} />
-          {[195, 175, 155, 135].map((radius) => (
+
+          <path
+            className="stadium-outer"
+            d={stadiumLanePath(STADIUM_OUTER_RADIUS)}
+          />
+
+          {lanes.map(({ player, relay, lane, teamColor }) => {
+            const lapLength = stadiumLapLength(stadiumLaneRadius(track, lane));
+            return (
+              <path
+                className="stadium-lane-trail"
+                d={stadiumLanePath(stadiumLaneRadius(track, lane))}
+                style={{
+                  stroke: teamColor,
+                  strokeWidth: track.laneWidth,
+                  strokeDasharray: `${lapLength} ${lapLength}`,
+                  strokeDashoffset: lapLength * (1 - relay.legDistanceRatio),
+                }}
+                key={`${player.id}:trail`}
+              />
+            );
+          })}
+
+          {Array.from({ length: track.laneCount + 1 }, (_, index) => (
             <path
               className="stadium-lane-line"
-              d={stadiumPath(235, 765, radius)}
-              key={radius}
+              d={stadiumLanePath(track.infieldRadius + track.laneWidth * index)}
+              key={`lane-line-${index}`}
             />
           ))}
-          <path className="stadium-infield" d={stadiumPath(235, 765, 115)} />
-          <path className="stadium-guide" d={STADIUM_CENTER_PATH} />
+
+          <path
+            className="stadium-infield"
+            d={stadiumLanePath(track.infieldRadius)}
+          />
+
+          {lanes.map(({ player, lane }) => (
+            <text
+              className="stadium-lane-label"
+              x={STADIUM_LEFT_CENTER + 30}
+              y={STADIUM_CENTER_Y + stadiumLaneRadius(track, lane)}
+              style={{ fontSize: laneLabelSize }}
+              key={`${player.id}:lane-label`}
+            >
+              <tspan className="stadium-lane-label-number">{lane + 1}</tspan>
+              <tspan dx={laneLabelSize * 0.6}>{player.nickname}</tspan>
+            </text>
+          ))}
+
           <rect
             className="stadium-finish-check"
-            x="875"
-            y="249"
-            width="105"
-            height="22"
-            fill={`url(#finish-check-${room.code})`}
+            x={STADIUM_RIGHT_CENTER + track.infieldRadius}
+            y={STADIUM_CENTER_Y - 13}
+            width={STADIUM_OUTER_RADIUS - track.infieldRadius}
+            height={26}
+            fill={`url(#${finishPatternId})`}
           />
-          <path className="stadium-finish-post" d="M875 249V172H982" />
-          <rect
-            className="stadium-finish-label-bg"
-            x="872"
-            y="133"
-            width="112"
-            height="42"
-            rx="4"
-          />
-          <text className="stadium-finish-label" x="928" y="162">
+          <text
+            className="stadium-finish-label"
+            x={STADIUM_RIGHT_CENTER + track.infieldRadius - 18}
+            y={STADIUM_CENTER_Y}
+          >
             FINISH
           </text>
+
+          <text
+            className="stadium-infield-note"
+            x={infieldCenterX}
+            y={STADIUM_CENTER_Y}
+          >
+            한 바퀴 = {room.finishBeats} 박동
+          </text>
+
+          {lanes.map(({ player, relay, lane, teamColor }) => {
+            const radius = stadiumLaneRadius(track, lane);
+            const nextRunner = relay.runners[relay.activeRunnerIndex + 1];
+            const isHandoff = relay.status === "handoff" && Boolean(nextRunner);
+            const beat = beatEffects[player.id];
+            // 바톤 전환에서는 두 주자가 같은 지점에 겹치므로 진행 방향 앞뒤로 벌립니다.
+            const runnerPoint = stadiumLanePoint(
+              radius,
+              relay.legDistanceRatio,
+              isHandoff ? -handoffGap : 0,
+            );
+            const nextPoint = isHandoff
+              ? stadiumLanePoint(radius, relay.legDistanceRatio, handoffGap)
+              : null;
+            return (
+              <g key={`${player.id}:racer`}>
+                {nextPoint && (
+                  <line
+                    className="stadium-baton"
+                    x1={runnerPoint.x}
+                    y1={runnerPoint.y}
+                    x2={nextPoint.x}
+                    y2={nextPoint.y}
+                    style={{
+                      stroke: teamColor,
+                      strokeWidth: markerSize * 0.12,
+                    }}
+                  />
+                )}
+                {nextPoint && nextRunner && (
+                  <StadiumRacerMark
+                    point={nextPoint}
+                    size={markerSize * 0.86}
+                    teamColor={teamColor}
+                    runnerNumber={relay.activeRunnerIndex + 2}
+                    className="stadium-next-racer"
+                  />
+                )}
+                <StadiumRacerMark
+                  point={runnerPoint}
+                  size={markerSize}
+                  teamColor={teamColor}
+                  runnerNumber={relay.activeRunnerIndex + 1}
+                  className={`${beat?.accent ? "is-accent" : ""} ${
+                    isHandoff ? "is-handoff" : ""
+                  }`}
+                  beatKey={beat?.beatId ?? "initial"}
+                />
+              </g>
+            );
+          })}
         </svg>
-
-        {entries.map(({ player, relay, rankingIndex, teamColor, progress }) => {
-          const collisionSlot = stadiumCollisionSlot(
-            entries,
-            player.id,
-            progress,
-          );
-          const position = stadiumPoint(
-            progress,
-            collisionSlot.normalOffset,
-            collisionSlot.tangentOffset,
-          );
-          const activeRunner = relay.runners[relay.activeRunnerIndex];
-          const beat = beatEffects[player.id];
-          return (
-            <div
-              className={`stadium-racer ${beat?.accent ? "is-accent" : ""} ${relay.status === "handoff" ? "is-handoff" : ""} ${collisionSlot.collisionCount >= 5 ? "is-packed" : ""}`}
-              style={
-                {
-                  left: position.left,
-                  top: position.top,
-                  zIndex: 100 - rankingIndex,
-                  "--team-color": teamColor,
-                  "--runner-color": activeRunner?.color,
-                } as React.CSSProperties
-              }
-              key={player.id}
-              aria-label={`${player.nickname} ${activeRunner?.name ?? "주자"}`}
-            >
-              <span className="racer-pulse" key={beat?.beatId ?? "initial"} />
-              <HeartSolid />
-              <strong>{player.nickname.slice(-2)}</strong>
-            </div>
-          );
-        })}
-
-        {entries.map(({ player, relay, progress, rankingIndex, teamColor }) => {
-          const nextRunner = relay.runners[relay.activeRunnerIndex + 1];
-          if (relay.status !== "handoff" || !nextRunner) return null;
-          const collisionSlot = stadiumCollisionSlot(
-            entries,
-            player.id,
-            progress,
-          );
-          const position = stadiumPoint(
-            progress,
-            collisionSlot.normalOffset,
-            collisionSlot.tangentOffset - 24,
-          );
-          return (
-            <div
-              className="stadium-racer stadium-next-racer"
-              style={
-                {
-                  left: position.left,
-                  top: position.top,
-                  zIndex: 110 - rankingIndex,
-                  "--team-color": teamColor,
-                  "--runner-color": nextRunner.color,
-                } as React.CSSProperties
-              }
-              key={`${player.id}:next`}
-              aria-label={`${player.nickname} ${nextRunner.name} 출발 준비`}
-            >
-              <HeartSolid />
-            </div>
-          );
-        })}
-
-        <div className="stadium-infield-copy" aria-hidden="true">
-          <span>SHARED TRACK</span>
-          <strong>모든 팀이 같은 거리를 달립니다</strong>
-        </div>
+        {overlay}
       </div>
 
       <div className="stadium-scoreboard">
-        {entries.map(({ player, relay, teamColor }, index) => {
-          const activeRunner = relay.runners[relay.activeRunnerIndex];
-          const nextRunner = relay.runners[relay.activeRunnerIndex + 1];
-          return (
-            <article
-              className="stadium-team-card"
-              style={
-                {
-                  "--team-color": teamColor,
-                } as React.CSSProperties
-              }
-              key={player.id}
-            >
-              <div>
-                <span className="stadium-team-rank">{index + 1}</span>
-                <h2>{player.nickname}</h2>
-              </div>
-              <p>
-                {relay.status === "handoff" ? (
-                  <>바톤 전달 중 · 다음 {nextRunner?.name ?? "주자"}</>
-                ) : (
-                  <>
-                    {activeRunner?.name} · <strong>{player.bpm ?? "—"}</strong>{" "}
-                    BPM
-                  </>
-                )}
-              </p>
-              <footer>
-                <span>
-                  {relay.legBeatCount}/{room.finishBeats} 박동
-                </span>
-                <span>
-                  {relay.completedRunners}/{relay.runners.length} 주자
-                </span>
-                <i>
-                  <b style={{ width: `${relay.teamDistanceRatio * 100}%` }} />
-                </i>
-              </footer>
-            </article>
-          );
-        })}
+        {/* 전시 화면에서는 현재 주자의 BPM만 크게 읽히면 됩니다. 순위·박동 수는
+            트랙 자체가 보여주므로 카드에서 덜어냈고, 순서는 레인으로 고정합니다. */}
+        {lanes.map(({ player, relay, lane, teamColor }) => (
+          <article
+            className={`stadium-team-card ${
+              relay.status === "handoff" ? "is-handoff" : ""
+            }`}
+            style={
+              {
+                "--team-color": teamColor,
+              } as React.CSSProperties
+            }
+            key={player.id}
+          >
+            <header>
+              <span className="stadium-team-lane">{lane + 1}</span>
+              <h2>{player.nickname}</h2>
+            </header>
+            <strong className="stadium-team-bpm">{player.bpm ?? "—"}</strong>
+            <span className="stadium-team-unit">
+              {relay.status === "handoff" ? "바톤 전달 중" : "BPM"}
+            </span>
+          </article>
+        ))}
       </div>
     </div>
   );
 }
 
-const STADIUM_CENTER_PATH = stadiumPath(235, 765, 165);
+function StadiumRacerMark({
+  point,
+  size,
+  teamColor,
+  runnerNumber,
+  className = "",
+  beatKey,
+}: {
+  point: { x: number; y: number };
+  size: number;
+  teamColor: string;
+  runnerNumber: number;
+  className?: string;
+  beatKey?: string;
+}) {
+  // 하트 원본은 32 x 29입니다. 중심을 원점에 맞추고 숫자는 하트가 가장 넓은 위쪽에 둡니다.
+  const scale = size / 32;
+  const numberY = (11.4 - 14.5) * scale;
+  return (
+    <g
+      className={`stadium-racer ${className}`}
+      style={{ transform: `translate(${point.x}px, ${point.y}px)` }}
+    >
+      <g className="stadium-racer-mark" key={beatKey ?? "static"}>
+        <path
+          className="stadium-racer-heart"
+          d={HEART_PATH}
+          style={{ fill: teamColor, strokeWidth: size * 0.1 }}
+          transform={`translate(${-16 * scale} ${-14.5 * scale}) scale(${scale})`}
+        />
+        <text
+          className="stadium-racer-number"
+          y={numberY}
+          style={{ fontSize: size * 0.42 }}
+        >
+          {runnerNumber}
+        </text>
+      </g>
+    </g>
+  );
+}
+
+const STADIUM_VIEW_WIDTH = 1240;
+const STADIUM_VIEW_HEIGHT = 620;
+const STADIUM_CENTER_Y = 310;
+const STADIUM_LEFT_CENTER = 322;
+const STADIUM_RIGHT_CENTER = 918;
+const STADIUM_OUTER_RADIUS = 296;
+const STADIUM_MIN_INFIELD_RADIUS = 88;
+const STADIUM_MAX_LANE_WIDTH = 74;
+const STADIUM_FALLBACK_COLOR = "#c04a63";
+// 트랙(#bf673c)과 색조가 겹치지 않도록 주황 계열은 피합니다.
 const STADIUM_TEAM_COLORS = [
-  "#d93e68",
-  "#216fd1",
-  "#ef7f24",
-  "#219b69",
-  "#7656d6",
-  "#087f8c",
-];
-const STADIUM_PACK_SLOTS = [
-  { tangentOffset: 30, normalOffset: 0 },
-  { tangentOffset: 10, normalOffset: -22 },
-  { tangentOffset: 10, normalOffset: 22 },
-  { tangentOffset: -10, normalOffset: -22 },
-  { tangentOffset: -10, normalOffset: 22 },
-  { tangentOffset: -30, normalOffset: 0 },
+  "#2f5f92",
+  "#d0a017",
+  "#2f7d55",
+  "#6f5aa8",
+  "#177f88",
+  "#b8365c",
 ];
 
-function stadiumPath(leftCenter: number, rightCenter: number, radius: number) {
-  const top = 260 - radius;
-  const bottom = 260 + radius;
-  return `M ${leftCenter} ${top} H ${rightCenter} A ${radius} ${radius} 0 0 1 ${rightCenter} ${bottom} H ${leftCenter} A ${radius} ${radius} 0 0 1 ${leftCenter} ${top} Z`;
+interface StadiumTrack {
+  laneCount: number;
+  laneWidth: number;
+  infieldRadius: number;
 }
 
-function stadiumRelayProgress(
-  relay: NonNullable<PlayerSnapshot["relay"]>,
-): number {
-  return relay.legDistanceRatio;
+/** 팀 수만큼 레인을 나눠 트랙 폭을 모두 사용합니다. 팀이 적을수록 레인이 넓어집니다. */
+function stadiumTrack(teamCount: number): StadiumTrack {
+  const laneCount = Math.max(teamCount, 1);
+  const laneWidth = Math.min(
+    STADIUM_MAX_LANE_WIDTH,
+    (STADIUM_OUTER_RADIUS - STADIUM_MIN_INFIELD_RADIUS) / laneCount,
+  );
+  return {
+    laneCount,
+    laneWidth,
+    infieldRadius: STADIUM_OUTER_RADIUS - laneWidth * laneCount,
+  };
 }
 
-function stadiumPoint(
-  progress: number,
-  normalOffset: number,
-  tangentOffset = 0,
-) {
-  const leftCenter = 235;
-  const rightCenter = 765;
-  const centerY = 260;
-  const radius = 165;
-  const straightLength = rightCenter - leftCenter;
+function stadiumLaneRadius(track: StadiumTrack, lane: number): number {
+  return track.infieldRadius + track.laneWidth * (lane + 0.5);
+}
+
+function stadiumLapLength(radius: number): number {
+  return (
+    (STADIUM_RIGHT_CENTER - STADIUM_LEFT_CENTER) * 2 + 2 * Math.PI * radius
+  );
+}
+
+/** 결승선(오른쪽 3시 방향)에서 시작해 진행 방향으로 한 바퀴 도는 레인 경로 */
+function stadiumLanePath(radius: number): string {
+  const left = STADIUM_LEFT_CENTER;
+  const right = STADIUM_RIGHT_CENTER;
+  const centerY = STADIUM_CENTER_Y;
+  const r = round2(radius);
+  return [
+    `M ${round2(right + r)} ${centerY}`,
+    `A ${r} ${r} 0 0 1 ${right} ${round2(centerY + r)}`,
+    `L ${left} ${round2(centerY + r)}`,
+    `A ${r} ${r} 0 0 1 ${left} ${round2(centerY - r)}`,
+    `L ${right} ${round2(centerY - r)}`,
+    `A ${r} ${r} 0 0 1 ${round2(right + r)} ${centerY}`,
+  ].join(" ");
+}
+
+function stadiumLanePointAt(radius: number, distance: number) {
+  const left = STADIUM_LEFT_CENTER;
+  const right = STADIUM_RIGHT_CENTER;
+  const centerY = STADIUM_CENTER_Y;
+  const straight = right - left;
   const quarterArc = (Math.PI * radius) / 2;
   const halfArc = Math.PI * radius;
-  const totalLength = straightLength * 2 + halfArc * 2;
-  const normalized = ((progress % 1) + 1) % 1;
+  const total = straight * 2 + halfArc * 2;
+  let travelled = ((distance % total) + total) % total;
 
-  const basePoint = (value: number) => {
-    let distance = (((value % 1) + 1) % 1) * totalLength;
-    if (distance <= quarterArc) {
-      const angle = distance / radius;
-      return {
-        x: rightCenter + radius * Math.cos(angle),
-        y: centerY + radius * Math.sin(angle),
-      };
-    }
-    distance -= quarterArc;
-    if (distance <= straightLength) {
-      return { x: rightCenter - distance, y: centerY + radius };
-    }
-    distance -= straightLength;
-    if (distance <= halfArc) {
-      const angle = Math.PI / 2 + distance / radius;
-      return {
-        x: leftCenter + radius * Math.cos(angle),
-        y: centerY + radius * Math.sin(angle),
-      };
-    }
-    distance -= halfArc;
-    if (distance <= straightLength) {
-      return { x: leftCenter + distance, y: centerY - radius };
-    }
-    distance -= straightLength;
-    const angle = (Math.PI * 3) / 2 + distance / radius;
+  if (travelled <= quarterArc) {
+    const angle = travelled / radius;
     return {
-      x: rightCenter + radius * Math.cos(angle),
+      x: right + radius * Math.cos(angle),
       y: centerY + radius * Math.sin(angle),
     };
+  }
+  travelled -= quarterArc;
+  if (travelled <= straight) {
+    return { x: right - travelled, y: centerY + radius };
+  }
+  travelled -= straight;
+  if (travelled <= halfArc) {
+    const angle = Math.PI / 2 + travelled / radius;
+    return {
+      x: left + radius * Math.cos(angle),
+      y: centerY + radius * Math.sin(angle),
+    };
+  }
+  travelled -= halfArc;
+  if (travelled <= straight) {
+    return { x: left + travelled, y: centerY - radius };
+  }
+  travelled -= straight;
+  const angle = (Math.PI * 3) / 2 + travelled / radius;
+  return {
+    x: right + radius * Math.cos(angle),
+    y: centerY + radius * Math.sin(angle),
   };
+}
 
-  const point = basePoint(normalized);
-  const ahead = basePoint(normalized + 0.0005);
+/**
+ * 레인 안에서 진행률에 해당하는 좌표입니다.
+ * 레인마다 한 바퀴 길이가 다르므로 각 레인의 한 바퀴를 기준으로 환산합니다.
+ * along은 진행 방향, outward는 트랙 바깥쪽으로의 보정치입니다.
+ */
+function stadiumLanePoint(
+  radius: number,
+  progress: number,
+  along = 0,
+  outward = 0,
+) {
+  const distance =
+    Math.min(Math.max(progress, 0), 1) * stadiumLapLength(radius) + along;
+  const point = stadiumLanePointAt(radius, distance);
+  if (outward === 0) return point;
+  const ahead = stadiumLanePointAt(radius, distance + 0.5);
   const tangentX = ahead.x - point.x;
   const tangentY = ahead.y - point.y;
-  const tangentLength = Math.hypot(tangentX, tangentY) || 1;
-  const x =
-    point.x +
-    (-tangentY / tangentLength) * normalOffset +
-    (tangentX / tangentLength) * tangentOffset;
-  const y =
-    point.y +
-    (tangentX / tangentLength) * normalOffset +
-    (tangentY / tangentLength) * tangentOffset;
+  const length = Math.hypot(tangentX, tangentY) || 1;
   return {
-    left: `${(x / 1000) * 100}%`,
-    top: `${(y / 520) * 100}%`,
+    x: point.x + (tangentY / length) * outward,
+    y: point.y - (tangentX / length) * outward,
   };
 }
 
-function stadiumCollisionSlot<
-  T extends { player: { id: string }; progress: number },
->(entries: T[], playerId: string, progress: number) {
-  const closeEntries = entries.filter(
-    (candidate) =>
-      circularProgressDistance(candidate.progress, progress) < 0.04,
-  );
-  if (closeEntries.length <= 1) {
-    return { tangentOffset: 0, normalOffset: 0, collisionCount: 1 };
-  }
-
-  const collisionIndex = closeEntries.findIndex(
-    (candidate) => candidate.player.id === playerId,
-  );
-  const activeSlots = STADIUM_PACK_SLOTS.slice(0, closeEntries.length);
-  const center = activeSlots.reduce(
-    (sum, slot) => ({
-      tangentOffset: sum.tangentOffset + slot.tangentOffset,
-      normalOffset: sum.normalOffset + slot.normalOffset,
-    }),
-    { tangentOffset: 0, normalOffset: 0 },
-  );
-  const slot = activeSlots[Math.max(0, collisionIndex)]!;
-  return {
-    tangentOffset:
-      slot.tangentOffset - center.tangentOffset / activeSlots.length,
-    normalOffset: slot.normalOffset - center.normalOffset / activeSlots.length,
-    collisionCount: closeEntries.length,
-  };
-}
-
-function circularProgressDistance(first: number, second: number): number {
-  const distance = Math.abs(first - second);
-  return Math.min(distance, 1 - distance);
+function round2(value: number): number {
+  return Math.round(value * 100) / 100;
 }
 
 function EndRaceButton({
@@ -1696,41 +1916,32 @@ function Finish({
         <h1>
           {manuallyEnded && tiedLeaders.length > 1 ? (
             <>
-              {tiedLeaders.length}
-              {room.mode === "relay" ? "팀" : "명"}이 공동 선두로
-              <br />
-              경기를 마쳤습니다.
+              <strong className="finish-winner">
+                {tiedLeaders.length}
+                {room.mode === "relay" ? "팀" : "명"} 공동 선두
+              </strong>
+              <span className="finish-outcome">경기를 마쳤습니다.</span>
             </>
           ) : (
             <>
-              {winner?.nickname}
-              <br />
-              {manuallyEnded
-                ? room.mode === "relay"
-                  ? "팀이 선두로 경기를 마쳤습니다."
-                  : "심장이 선두로 경기를 마쳤습니다."
-                : room.mode === "relay"
-                  ? "팀이 바톤을 먼저 연결했습니다."
-                  : "심장이 먼저 도착했습니다."}
+              <strong className="finish-winner">{winner?.nickname}</strong>
+              <span className="finish-outcome">
+                {manuallyEnded
+                  ? room.mode === "relay"
+                    ? "팀이 선두로 경기를 마쳤습니다."
+                    : "심장이 선두로 경기를 마쳤습니다."
+                  : room.mode === "relay"
+                    ? "팀이 바톤을 먼저 연결했습니다."
+                    : "심장이 먼저 도착했습니다."}
+              </span>
             </>
           )}
         </h1>
         <p>
-          {manuallyEnded ? (
-            <>
-              {winner?.beatCount ?? 0}번의 박동에서 경기를 종료했습니다.
-              {room.mode === "relay" && winner?.relay
-                ? ` · 팀별 ${winner.relay.runners.length}명의 주자`
-                : ""}
-            </>
-          ) : room.mode === "relay" && winner?.relay ? (
-            <>
-              {winner.relay.runners.length}명의 주자가 {winner.beatCount}번의
-              박동으로 완주
-            </>
-          ) : (
-            <>{winner?.beatCount ?? room.finishBeats}번의 박동으로 완주</>
-          )}
+          {room.mode === "relay" && winner?.relay
+            ? `${winner.relay.runners.length}명의 주자 · `
+            : ""}
+          최고 심박수 <strong>{formatBpm(winner?.maxBpm)}</strong> BPM
         </p>
       </div>
       <ol className="ranking-list">
@@ -1744,7 +1955,9 @@ function Finish({
                 : (player.finishPlace ?? index + 1)}
             </span>
             <strong>{player.nickname}</strong>
-            <span>{player.beatCount} 박동</span>
+            <span className="ranking-bpm">
+              최고 <b>{formatBpm(player.maxBpm)}</b> BPM
+            </span>
           </li>
         ))}
       </ol>
@@ -1758,8 +1971,60 @@ function Finish({
           <ArrowIcon />
         </button>
       )}
+      <div className="finish-brand">
+        <CccMark />
+        <PartnerLockup />
+      </div>
     </section>
   );
+}
+
+/** 포스터의 `nuvook | LIVINGLIKEAGIRAFFE` 락업 */
+function PartnerLockup() {
+  return (
+    <p className="partner-lockup" aria-label="누부크 × 리빙라이크어지라프">
+      <span className="partner-nuvook">nuvook</span>
+      <span className="partner-divider" aria-hidden="true" />
+      <span className="partner-llg">LIVINGLIKEAGIRAFFE</span>
+    </p>
+  );
+}
+
+/** 세 개의 ㅊ 마크. 포스터 원본에서 배경을 걷어낸 뒤 마스크로 씁니다. */
+function CccMark({ className = "" }: { className?: string }) {
+  return (
+    <span
+      className={`ccc-mark ${className}`}
+      role="img"
+      aria-label="ㅊㅊㅊ 운동회"
+    />
+  );
+}
+
+function ErrorToast({
+  message,
+  onDismiss,
+}: {
+  message: string;
+  onDismiss: () => void;
+}) {
+  useEffect(() => {
+    const timer = window.setTimeout(onDismiss, 7_000);
+    return () => window.clearTimeout(timer);
+  }, [message, onDismiss]);
+
+  return (
+    <div className="error-toast" role="alert">
+      <p>{message}</p>
+      <button type="button" onClick={onDismiss} aria-label="알림 닫기">
+        ×
+      </button>
+    </div>
+  );
+}
+
+function formatBpm(bpm: number | null | undefined): string {
+  return bpm == null ? "—" : String(bpm);
 }
 
 function LiveDot({ live }: { live: boolean }) {
@@ -1804,10 +2069,13 @@ function HeartOutline() {
   );
 }
 
+const HEART_PATH =
+  "M23.3.7c-3 0-5.7 1.6-7.3 4C14.4 2.3 11.7.7 8.7.7 3.9.7 0 4.6 0 9.4c0 8.1 16 18.9 16 18.9S32 17.5 32 9.4C32 4.6 28.1.7 23.3.7Z";
+
 function HeartSolid() {
   return (
     <svg className="heart-solid" viewBox="0 0 32 29" aria-hidden="true">
-      <path d="M23.3.7c-3 0-5.7 1.6-7.3 4C14.4 2.3 11.7.7 8.7.7 3.9.7 0 4.6 0 9.4c0 8.1 16 18.9 16 18.9S32 17.5 32 9.4C32 4.6 28.1.7 23.3.7Z" />
+      <path d={HEART_PATH} />
     </svg>
   );
 }

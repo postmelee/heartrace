@@ -29,7 +29,8 @@ const MIN_SIGNAL_QUALITY = 0.3;
 const MAX_BEAT_EVENT_AGE_MS = 15_000;
 const MAX_BEAT_EVENT_FUTURE_MS = 5_000;
 
-export interface PlayerState extends PlayerSnapshot {
+// laneIndex는 방 안에서의 입장 순서로만 정해지므로 스냅샷을 만들 때 계산합니다.
+export interface PlayerState extends Omit<PlayerSnapshot, "laneIndex"> {
   token: string;
   socketId: string | null;
   lastSequence: number;
@@ -144,6 +145,7 @@ export function addPlayer(
     measurementState: "joined",
     ready: false,
     bpm: null,
+    maxBpm: null,
     signalQuality: 0,
     beatCount: 0,
     distanceRatio: 0,
@@ -330,6 +332,7 @@ export function acceptBeat(
   // 서버가 다시 과거 IBI와 비교하면 정상적인 급상승과 신호 회복까지
   // 연쇄적으로 누락되므로 여기서는 절대 범위와 이벤트 순서만 검증합니다.
   player.bpm = Math.max(30, Math.min(220, Math.round(beat.bpm)));
+  player.maxBpm = Math.max(player.maxBpm ?? 0, player.bpm);
   player.signalQuality = clamp01(beat.signalQuality);
   player.beatCount += 1;
   const finishTarget = player.relay
@@ -436,13 +439,15 @@ export function completeRelayHandoff(
 
 export function toSnapshot(room: RoomState): RoomSnapshot {
   const players = [...room.players.values()]
-    .map<PlayerSnapshot>((player) => ({
+    .map<PlayerSnapshot>((player, laneIndex) => ({
       id: player.id,
+      laneIndex,
       nickname: player.nickname,
       connected: player.connected,
       measurementState: player.measurementState,
       ready: player.ready,
       bpm: player.bpm,
+      maxBpm: player.maxBpm,
       signalQuality: player.signalQuality,
       beatCount: player.beatCount,
       distanceRatio: player.distanceRatio,
@@ -485,6 +490,7 @@ function resetRaceProgress(room: RoomState): void {
   room.nextFinishPlace = 1;
   for (const player of room.players.values()) {
     player.beatCount = 0;
+    player.maxBpm = null;
     player.distanceRatio = 0;
     player.finishPlace = null;
     player.lastSequence = -1;
