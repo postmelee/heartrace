@@ -60,6 +60,8 @@ import { colors, fonts } from "./src/theme";
 
 const DEV_SIMULATOR =
   __DEV__ || process.env.EXPO_PUBLIC_ENABLE_SIMULATOR === "true";
+const ENABLE_RACE_PREVIEW =
+  __DEV__ || process.env.EXPO_PUBLIC_ENABLE_RACE_PREVIEW === "true";
 const PUBLIC_URL =
   process.env.EXPO_PUBLIC_PUBLIC_URL ??
   "https://heartrace-postmelee.onrender.com";
@@ -349,7 +351,7 @@ function HeartRaceApp() {
               notice={game.notice}
               onJoin={game.join}
               onOpenRacePreview={
-                __DEV__
+                ENABLE_RACE_PREVIEW
                   ? () => {
                       void Haptics.impactAsync(
                         Haptics.ImpactFeedbackStyle.Medium,
