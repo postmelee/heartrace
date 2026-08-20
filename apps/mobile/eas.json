@@ -9,11 +9,19 @@
       "distribution": "internal"
     },
     "preview": {
+      "autoIncrement": true,
       "distribution": "internal",
       "env": {
         "EXPO_PUBLIC_SOCKET_URL": "https://heartrace-api-postmelee.onrender.com",
         "EXPO_PUBLIC_PUBLIC_URL": "https://heartrace-postmelee.onrender.com",
-        "EXPO_PUBLIC_SHOW_DIAGNOSTICS": "false"
+        "EXPO_PUBLIC_SHOW_DIAGNOSTICS": "false",
+        "EXPO_PUBLIC_ENABLE_RACE_PREVIEW": "true"
+      }
+    },
+    "testflight": {
+      "extends": "production",
+      "env": {
+        "EXPO_PUBLIC_ENABLE_RACE_PREVIEW": "true"
       }
     },
     "production": {
