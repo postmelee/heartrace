@@ -49,9 +49,9 @@ async function main(): Promise<void> {
   assert(
     handoffRoom.players.every(
       (player) =>
-        (player.relay?.handoffEndsAt ?? 0) - handoffRoom.serverNow <= 5_000,
+        (player.relay?.handoffEndsAt ?? 0) - handoffRoom.serverNow <= 3_000,
     ),
-    "각 팀의 바톤 전환은 5초 이하여야 합니다.",
+    "각 팀의 바톤 전환은 방에서 설정한 3초 이하여야 합니다.",
   );
 
   const rejected = await sendBeat(first.socket, 10, 78, Date.now());
@@ -103,7 +103,12 @@ function createRelayRoom(host: GameSocket): Promise<HostCreateRoomResponse> {
         finishBeats: 10,
         mode: "relay",
         trackMode: "circular",
-        relay: { teamCount: 2, runnersPerTeam: 2, legBeats: 10 },
+        relay: {
+          teamCount: 2,
+          runnersPerTeam: 2,
+          legBeats: 10,
+          handoffDurationMs: 3_000,
+        },
       },
       (result) => {
         if (result.ok) resolve(result.data);

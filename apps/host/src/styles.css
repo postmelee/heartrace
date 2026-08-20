@@ -193,17 +193,63 @@ button {
 }
 .number-picker,
 .select-picker,
-.choice-picker {
+.choice-picker,
+.time-input-picker {
   min-width: 154px;
 }
 .number-picker > span,
 .select-picker > span,
-.choice-picker > span {
+.choice-picker > span,
+.time-input-picker > span:first-child {
   display: block;
   margin: 0 0 6px 4px;
   color: #7c6e5e;
   font-size: 11px;
   font-weight: 700;
+}
+.time-input-picker {
+  position: relative;
+  display: block;
+}
+.time-input-control {
+  min-height: 52px;
+  padding: 0 14px;
+  border: 1px solid var(--line);
+  border-radius: 16px;
+  background: #fff;
+  display: flex;
+  align-items: center;
+  gap: 5px;
+}
+.time-input-control:has(input:focus-visible) {
+  border-color: var(--green);
+  outline: 2px solid color-mix(in srgb, var(--green) 18%, transparent);
+}
+.time-input-control:has(input[aria-invalid="true"]) {
+  border-color: #b84735;
+}
+.time-input-control input {
+  width: 64px;
+  min-width: 0;
+  border: 0;
+  outline: 0;
+  background: transparent;
+  color: var(--ink);
+  font: inherit;
+  font-size: 14px;
+  font-weight: 750;
+  font-variant-numeric: tabular-nums;
+}
+.time-input-control strong {
+  color: #7c6e5e;
+  font-size: 13px;
+}
+.time-input-picker small {
+  position: absolute;
+  top: calc(100% + 4px);
+  left: 5px;
+  color: #8c7e6d;
+  font-size: 10px;
 }
 .number-picker > div {
   min-height: 52px;
@@ -1124,16 +1170,35 @@ button {
   font-size: 17px;
   font-weight: 600;
 }
+.countdown-number-slot {
+  width: min(92vw, 1000px);
+  min-height: clamp(190px, min(28vw, 48vh), 520px);
+  margin: 1vh 0;
+  padding: clamp(24px, 4vh, 56px);
+  display: grid;
+  place-items: center;
+  overflow: visible;
+}
 .countdown-number {
-  min-height: 0.9em;
-  margin: 2vh 0;
+  min-width: 1.15em;
+  padding: 0.12em 0.2em 0.18em;
   color: var(--track-ink);
   font-size: clamp(120px, min(22vw, 40vh), 420px);
   text-shadow: 0 0 46px color-mix(in srgb, var(--field) 92%, transparent);
-  line-height: 0.78;
+  line-height: 1;
   font-weight: 800;
-  letter-spacing: -0.09em;
+  font-variant-numeric: tabular-nums;
+  letter-spacing: 0;
+  text-align: center;
+  overflow: visible;
+  transform-origin: center;
   animation: countdown-pop 600ms var(--ease-out) both;
+}
+.countdown-number.is-ready {
+  min-width: 0;
+  font-size: clamp(64px, min(12vw, 20vh), 180px);
+  line-height: 1.12;
+  letter-spacing: 0;
 }
 .countdown-overlay > span {
   padding: 6px 16px;
@@ -2060,7 +2125,8 @@ button {
   .mode-picker,
   .number-picker,
   .select-picker,
-  .choice-picker {
+  .choice-picker,
+  .time-input-picker {
     flex: 1;
   }
   .edition {

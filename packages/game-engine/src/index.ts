@@ -1,10 +1,12 @@
 import {
   DEFAULT_HANDOFF_DURATION_MS,
   DEFAULT_FINISH_BEATS,
+  MAX_HANDOFF_DURATION_MS,
   MAX_RELAY_RUNNERS,
   MAX_TEAM_COUNT,
   MAX_PLAYERS,
   MIN_RELAY_RUNNERS,
+  MIN_HANDOFF_DURATION_MS,
   MIN_TEAM_COUNT,
   RELAY_LEG_BEAT_OPTIONS,
   RELAY_RUNNER_COLORS,
@@ -78,6 +80,7 @@ export function createRoomState(input: {
     teamCount: number;
     runnersPerTeam: number;
     legBeats: number;
+    handoffDurationMs?: number;
   };
 }): RoomState {
   const mode = input.mode ?? "individual";
@@ -514,6 +517,7 @@ function normalizeRelaySettings(
         teamCount: number;
         runnersPerTeam: number;
         legBeats: number;
+        handoffDurationMs?: number;
       }
     | undefined,
 ): RelayRoomSettings {
@@ -521,6 +525,8 @@ function normalizeRelaySettings(
   const teamCount = Math.round(input.teamCount);
   const runnersPerTeam = Math.round(input.runnersPerTeam);
   const legBeats = Math.round(input.legBeats);
+  const handoffDurationMs =
+    input.handoffDurationMs ?? DEFAULT_HANDOFF_DURATION_MS;
   if (
     !Number.isInteger(teamCount) ||
     teamCount < MIN_TEAM_COUNT ||
@@ -542,11 +548,21 @@ function normalizeRelaySettings(
   if (!RELAY_LEG_BEAT_OPTIONS.some((option) => option === legBeats)) {
     throw new Error("주자당 박동은 10·20·30·60 중에서 선택해 주세요.");
   }
+  if (
+    !Number.isInteger(handoffDurationMs) ||
+    handoffDurationMs % 1_000 !== 0 ||
+    handoffDurationMs < MIN_HANDOFF_DURATION_MS ||
+    handoffDurationMs > MAX_HANDOFF_DURATION_MS
+  ) {
+    throw new Error(
+      `바톤 전환 시간은 ${MIN_HANDOFF_DURATION_MS / 1_000}~${MAX_HANDOFF_DURATION_MS / 1_000}초 사이의 정수여야 합니다.`,
+    );
+  }
   return {
     teamCount,
     runnersPerTeam,
     legBeats,
-    handoffDurationMs: DEFAULT_HANDOFF_DURATION_MS,
+    handoffDurationMs,
   };
 }
 

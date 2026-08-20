@@ -140,6 +140,34 @@ describe("심박 경주 규칙", () => {
         relay: { teamCount: 2, runnersPerTeam: 3, legBeats: 15 },
       }),
     ).toThrow("주자당 박동은 10·20·30·60 중에서 선택해 주세요.");
+    expect(() =>
+      createRoomState({
+        code: "BAD5",
+        hostToken: "host-token",
+        hostSocketId: "host-socket",
+        mode: "relay",
+        relay: {
+          teamCount: 2,
+          runnersPerTeam: 3,
+          legBeats: 20,
+          handoffDurationMs: 2_000,
+        },
+      }),
+    ).toThrow("바톤 전환 시간은 3~30초 사이의 정수여야 합니다.");
+    expect(() =>
+      createRoomState({
+        code: "BAD6",
+        hostToken: "host-token",
+        hostSocketId: "host-socket",
+        mode: "relay",
+        relay: {
+          teamCount: 2,
+          runnersPerTeam: 3,
+          legBeats: 20,
+          handoffDurationMs: 3_500,
+        },
+      }),
+    ).toThrow("바톤 전환 시간은 3~30초 사이의 정수여야 합니다.");
   });
 
   it("팀전은 최대 여섯 팀까지 생성할 수 있다", () => {
@@ -172,6 +200,56 @@ describe("심박 경주 규칙", () => {
       firstTeam.relay?.runners.slice(0, 2).map((runner) => runner.name),
     ).toEqual(["첫 주자", "둘째 주자"]);
     expect(firstTeam.relay?.legFinishBeat).toBe(20);
+  });
+
+  it("방에서 설정한 바톤 전환 시간을 저장하고 주자 교체에 적용한다", () => {
+    const room = createRoomState({
+      code: "TENSC",
+      hostToken: "host-token",
+      hostSocketId: "host-socket",
+      mode: "relay",
+      relay: {
+        teamCount: 2,
+        runnersPerTeam: 2,
+        legBeats: 10,
+        handoffDurationMs: 10_000,
+      },
+    });
+    const team = addPlayer(room, {
+      id: "team-1",
+      token: "team-token",
+      socketId: "team-socket",
+      nickname: "한 팀",
+    });
+    addPlayer(room, {
+      id: "team-2",
+      token: "team-token-2",
+      socketId: "team-socket-2",
+      nickname: "두 팀",
+    });
+    updateMeasurement(team, { state: "ready", bpm: 72, signalQuality: 0.9 });
+    updateMeasurement(room.players.get("team-2")!, {
+      state: "ready",
+      bpm: 76,
+      signalQuality: 0.9,
+    });
+    startCountdown(room, 1_000);
+    beginRace(room, 5_000);
+
+    let boundary = acceptBeat(room, team.id, beat(1), 5_800);
+    for (let sequence = 2; sequence <= 10; sequence += 1) {
+      boundary = acceptBeat(
+        room,
+        team.id,
+        beat(sequence),
+        5_000 + sequence * 800,
+      );
+    }
+
+    expect(room.relaySettings?.handoffDurationMs).toBe(10_000);
+    expect(boundary.event?.relay?.handoffEndsAt).toBe(23_000);
+    expect(completeRelayHandoff(room, team.id, 22_999)).toBe(false);
+    expect(completeRelayHandoff(room, team.id, 23_000)).toBe(true);
   });
 
   it("설정한 팀이 모두 입장하기 전에는 팀전을 시작하지 않는다", () => {

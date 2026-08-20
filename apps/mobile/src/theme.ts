@@ -1,11 +1,18 @@
 export const colors = {
-  ink: "#050505",
-  paper: "#FFFFFF",
-  muted: "#6B6B6B",
-  subtle: "#919191",
-  line: "#DEDEDB",
-  faint: "#F4F4F2",
-  error: "#9C1C1C",
+  moss: "#9B9443",
+  mossDeep: "#7D7734",
+  olive: "#3E3B1B",
+  oliveSoft: "#565232",
+  cream: "#FBFBEE",
+  ink: "#3E3B1B",
+  paper: "#F6F4E6",
+  surface: "#FFFFFF",
+  muted: "#6F6A4A",
+  subtle: "#8C8768",
+  placeholder: "#A7A283",
+  line: "#D9D5BD",
+  faint: "#EFEDDC",
+  error: "#B84735",
 } as const;
 
 export const fonts = {

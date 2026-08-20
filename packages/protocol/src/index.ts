@@ -5,6 +5,8 @@ export const MAX_TEAM_COUNT = 6;
 export const MIN_RELAY_RUNNERS = 2;
 export const MAX_RELAY_RUNNERS = 30;
 export const DEFAULT_HANDOFF_DURATION_MS = 5_000;
+export const MIN_HANDOFF_DURATION_MS = 3_000;
+export const MAX_HANDOFF_DURATION_MS = 30_000;
 export const RELAY_LEG_BEAT_OPTIONS = [10, 20, 30, 60] as const;
 export const RELAY_RUNNER_COLORS = [
   "#ff4d4f",
@@ -13,6 +15,15 @@ export const RELAY_RUNNER_COLORS = [
   "#377dff",
   "#8b5cf6",
   "#ec4899",
+] as const;
+/** 웹 경기장과 참가자 앱이 함께 사용하는 팀 고유색입니다. */
+export const RELAY_TEAM_COLORS = [
+  "#2f5f92",
+  "#d0a017",
+  "#2f7d55",
+  "#6f5aa8",
+  "#177f88",
+  "#b8365c",
 ] as const;
 
 export type RoomPhase = "lobby" | "countdown" | "racing" | "finished";
@@ -155,6 +166,7 @@ export interface HostCreateRoomRequest {
     teamCount: number;
     runnersPerTeam: number;
     legBeats: number;
+    handoffDurationMs?: number;
   };
 }
 
