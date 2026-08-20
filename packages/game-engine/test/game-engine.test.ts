@@ -8,6 +8,7 @@ import {
   createRoomState,
   endRace,
   removePlayer,
+  resetRoom,
   startCountdown,
   updateMeasurement,
 } from "../src/index";
@@ -365,6 +366,42 @@ describe("심박 경주 규칙", () => {
     expect(second.event?.distanceRatio).toBe(0.2);
     expect(second.beatCount).toBe(2);
     expect(second.event?.bpm).toBe(160);
+  });
+
+  it("경기 중 승인된 박동의 최고 BPM을 기록하고 재경기에서 지운다", () => {
+    const { room, player } = setupRace(10);
+    expect(player.maxBpm).toBe(null);
+
+    acceptBeat(room, "player-1", beat(1, { bpm: 96 }), 5_800);
+    acceptBeat(room, "player-1", beat(2, { bpm: 164 }), 6_600);
+    acceptBeat(room, "player-1", beat(3, { bpm: 120 }), 7_400);
+
+    // 마지막 BPM이 낮아져도 최고치는 유지합니다.
+    expect(player.bpm).toBe(120);
+    expect(player.maxBpm).toBe(164);
+
+    resetRoom(room);
+    expect(player.maxBpm).toBe(null);
+  });
+
+  it("바톤을 넘겨도 팀의 최고 BPM은 주자 전체 기준으로 남는다", () => {
+    const { room, firstTeam } = setupRelayRace(10);
+    for (let sequence = 1; sequence <= 10; sequence += 1) {
+      acceptBeat(
+        room,
+        firstTeam.id,
+        beat(sequence, { bpm: sequence === 4 ? 150 : 96 }),
+        5_000 + sequence * 800,
+      );
+    }
+    expect(completeRelayHandoff(room, firstTeam.id, 18_000)).toBe(true);
+
+    // 다음 주자에게 현재 BPM은 물려주지 않지만 팀 기록은 이어집니다.
+    expect(firstTeam.bpm).toBeNull();
+    expect(firstTeam.maxBpm).toBe(150);
+
+    acceptBeat(room, firstTeam.id, beat(11, { detectedAt: 18_600 }), 18_600);
+    expect(firstTeam.maxBpm).toBe(150);
   });
 
   it("3번째 박동은 이동량이 아니라 시각 강조만 켠다", () => {

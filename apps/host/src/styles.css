@@ -6,14 +6,34 @@
     BlinkMacSystemFont,
     "Apple SD Gothic Neo",
     sans-serif;
-  color: #050505;
-  background: #fff;
+  color: #2a2119;
+  background: var(--paper);
   font-synthesis: none;
   text-rendering: optimizeLegibility;
-  --ink: #050505;
-  --muted: #686868;
-  --faint: #f3f3f1;
-  --line: #dededb;
+  /*
+   * 《ㅊㅊㅊ 운동회》 (@livinglikeagiraffe_ × @nuvook_) 브랜드 토큰.
+   * 포스터에서 추출: 잔디 모스 그린 #9b9443, 딥 올리브 #3e3b1b, 크림 #fbfbee.
+   */
+  --moss: #9b9443;
+  --moss-deep: #7d7734;
+  --olive: #3e3b1b;
+  --olive-soft: #565232;
+  --cream: #fbfbee;
+
+  --ink: #3e3b1b;
+  --muted: #6f6a4a;
+  --faint: #efeddc;
+  --line: #d9d5bd;
+  --paper: #f6f4e6;
+  --green: #7d7734;
+  --green-deep: #5c5726;
+  --green-soft: #e7e6cf;
+
+  /* 트랙 그래픽은 별도로 지정받은 팔레트를 유지합니다. */
+  --field: #e6dad1;
+  --track: #bf673c;
+  --turf: #dceca1;
+  --track-ink: #3b1b10;
   --ease-out: cubic-bezier(0.2, 0, 0, 1);
 }
 
@@ -24,13 +44,14 @@
 html,
 body,
 #root {
-  min-height: 100%;
+  height: 100%;
   margin: 0;
+  overflow: hidden;
 }
 
 body {
   min-width: 320px;
-  background: #fff;
+  background: var(--paper);
 }
 
 button,
@@ -46,18 +67,20 @@ button {
 }
 
 .home {
-  min-height: 100vh;
-  padding: clamp(28px, 4vw, 64px);
+  height: 100dvh;
+  overflow: hidden;
+  padding: clamp(18px, 3vh, 64px) clamp(24px, 4vw, 64px);
   display: grid;
-  grid-template-rows: auto 1fr auto auto;
+  grid-template-rows: auto minmax(0, 1fr) auto auto;
 }
 
 .home-kicker,
 .top-room-info {
   display: flex;
   align-items: center;
-  gap: 10px;
-  color: #555;
+  flex-wrap: wrap;
+  gap: 10px 14px;
+  color: #5e5142;
   font-size: 14px;
   font-weight: 600;
 }
@@ -66,13 +89,13 @@ button {
   width: 8px;
   height: 8px;
   border-radius: 50%;
-  background: #aaa;
-  box-shadow: 0 0 0 5px #eee;
+  background: #a89b89;
+  box-shadow: 0 0 0 5px #ebe4d8;
 }
 
 .live-dot.is-live {
-  background: var(--ink);
-  box-shadow: 0 0 0 5px #e8e8e5;
+  background: var(--green);
+  box-shadow: 0 0 0 5px #e8e1d4;
 }
 
 .home-copy {
@@ -82,7 +105,7 @@ button {
 }
 .eyebrow {
   margin: 0 0 18px;
-  color: #656565;
+  color: #6e6153;
   font-size: 13px;
   font-weight: 750;
   letter-spacing: 0.12em;
@@ -100,7 +123,7 @@ button {
 
 .home-description {
   margin: 36px 0 0;
-  color: #4f4f4f;
+  color: #584a3b;
   font-size: clamp(18px, 1.7vw, 27px);
   line-height: 1.55;
   letter-spacing: -0.02em;
@@ -116,7 +139,7 @@ button {
   padding: 0 16px;
   border: 1px solid var(--line);
   border-radius: 14px;
-  color: #555;
+  color: #5e5142;
   display: inline-flex;
   align-items: center;
   font-size: 13px;
@@ -154,7 +177,7 @@ button {
   border: 0;
   border-radius: 11px;
   background: transparent;
-  color: #777;
+  color: #7c6e5e;
   font-weight: 700;
   cursor: pointer;
 }
@@ -178,7 +201,7 @@ button {
 .choice-picker > span {
   display: block;
   margin: 0 0 6px 4px;
-  color: #777;
+  color: #7c6e5e;
   font-size: 11px;
   font-weight: 700;
 }
@@ -236,7 +259,7 @@ button {
   border: 0;
   border-radius: 11px;
   background: transparent;
-  color: #777;
+  color: #7c6e5e;
   font-weight: 700;
   cursor: pointer;
 }
@@ -254,7 +277,7 @@ button {
 .edition {
   justify-self: end;
   margin: 34px 0 0;
-  color: #8a8a8a;
+  color: #8c7e6d;
   font-size: 12px;
 }
 
@@ -263,7 +286,7 @@ button {
   padding: 0 24px;
   border: 0;
   border-radius: 18px;
-  background: var(--ink);
+  background: var(--green);
   color: #fff;
   display: inline-flex;
   align-items: center;
@@ -279,13 +302,13 @@ button {
 
 .primary-button:hover:not(:disabled) {
   transform: translateY(-2px);
-  background: #222;
+  background: var(--green-deep);
 }
 .primary-button:active:not(:disabled) {
   transform: scale(0.975);
 }
 .primary-button:focus-visible {
-  outline: 3px solid #050505;
+  outline: 3px solid #2a2119;
   outline-offset: 4px;
 }
 .primary-button:disabled {
@@ -307,13 +330,15 @@ button {
 }
 .error-message {
   margin: 0;
-  color: #9c1c1c;
+  color: #8e2b1e;
   font-size: 14px;
   font-weight: 600;
 }
 
 .public-page {
-  min-height: 100vh;
+  min-height: 100dvh;
+  max-height: 100dvh;
+  overflow: auto;
   max-width: 960px;
   margin: 0 auto;
   padding: clamp(28px, 6vw, 68px) clamp(22px, 6vw, 64px);
@@ -408,11 +433,11 @@ button {
   display: grid;
   grid-template-columns: 38px 1fr;
   gap: 12px;
-  color: #4f4f4f;
+  color: #584a3b;
   line-height: 1.55;
 }
 .tester-steps span {
-  color: #929292;
+  color: #948674;
   font-size: 12px;
   font-variant-numeric: tabular-nums;
 }
@@ -423,7 +448,7 @@ button {
   gap: 20px;
 }
 .public-footer a {
-  color: #777;
+  color: #7c6e5e;
   font-size: 13px;
 }
 .public-document article {
@@ -441,7 +466,7 @@ button {
 }
 .public-document article > p:not(.eyebrow) {
   margin: 0;
-  color: #555;
+  color: #5e5142;
   font-size: 16px;
   line-height: 1.8;
 }
@@ -450,14 +475,24 @@ button {
   padding: 20px;
   border-radius: 14px;
   background: var(--faint);
-  color: #333 !important;
+  color: #3d3227 !important;
   font-weight: 600;
 }
 
 .app-shell {
-  min-height: 100vh;
+  height: 100dvh;
+  overflow: hidden;
   display: grid;
-  grid-template-rows: 78px 1fr;
+  /* minmax(0, …)이라야 내용이 커져도 행이 화면 밖으로 밀리지 않습니다. */
+  grid-template-rows: 78px minmax(0, 1fr);
+}
+.app-shell > .home,
+.app-shell > .lobby,
+.app-shell > .race,
+.app-shell > .finish {
+  min-height: 0;
+  height: 100%;
+  overflow: hidden;
 }
 .top-bar {
   padding: 0 clamp(24px, 4vw, 64px);
@@ -466,15 +501,204 @@ button {
   justify-content: space-between;
   border-bottom: 1px solid var(--line);
 }
+.new-room-button {
+  min-height: 32px;
+  padding: 0 13px;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  background: #fff;
+  color: var(--ink);
+  font-size: 12px;
+  font-weight: 700;
+  cursor: pointer;
+  transition:
+    color 160ms ease,
+    background 160ms ease,
+    border-color 160ms ease;
+}
+.new-room-button:hover {
+  border-color: var(--green);
+  background: var(--green);
+  color: #fff;
+}
+/* 전시 모드에서 헤더가 막다른 길이 되지 않도록 남기는 손잡이.
+   헤더 밖에 두고 화면에 고정해야 헤더가 내려와도 자리를 지킵니다. */
+.immersive-handle {
+  position: fixed;
+  z-index: 80;
+  top: 0;
+  left: 50%;
+  transform: translateX(-50%);
+  min-height: 22px;
+  padding: 0 14px 2px;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  border: 1px solid var(--line);
+  border-top: 0;
+  border-radius: 0 0 12px 12px;
+  background: var(--paper);
+  color: var(--muted);
+  font-size: 11px;
+  font-weight: 700;
+  line-height: 1;
+  cursor: pointer;
+  opacity: 0.72;
+  transition:
+    opacity 160ms ease,
+    color 160ms ease;
+}
+.immersive-handle:hover {
+  opacity: 1;
+  color: var(--ink);
+}
+.immersive-handle-label {
+  letter-spacing: 0.02em;
+}
+.immersive-toggle {
+  min-height: 32px;
+  padding: 0 12px;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  background: #fff;
+  color: #6e6153;
+  font-size: 12px;
+  font-weight: 700;
+  cursor: pointer;
+  transition:
+    color 160ms ease,
+    background 160ms ease,
+    border-color 160ms ease;
+}
+.immersive-toggle:hover {
+  border-color: var(--green);
+  color: var(--green);
+}
+.immersive-toggle.is-on {
+  border-color: var(--green);
+  background: var(--green);
+  color: #fff;
+}
+/* 전시 모드: 헤더를 화면 밖으로 밀고, 위쪽 가장자리에 마우스를 올리면 되돌아옵니다.
+   마우스가 없는 프로젝터에서는 H 키로 켜고 끕니다. */
+/* 전시 모드에서는 헤더가 position: fixed로 흐름에서 빠지므로,
+   남은 화면 하나만 행으로 둡니다. 빈 행을 남기면 화면이 그 행으로 밀려 깨집니다. */
+.app-shell.is-immersive {
+  grid-template-rows: minmax(0, 1fr);
+}
+.app-shell.is-immersive .top-bar {
+  position: fixed;
+  z-index: 70;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 78px;
+  background: var(--paper);
+  transform: translateY(-100%);
+  transition: transform 220ms var(--ease-out);
+}
+.app-shell.is-immersive .top-bar::after {
+  content: "";
+  position: absolute;
+  top: 100%;
+  left: 0;
+  right: 0;
+  height: 18px;
+}
+.app-shell.is-immersive .top-bar:hover,
+.app-shell.is-immersive .top-bar:focus-within {
+  transform: translateY(0);
+}
 .wordmark {
   padding: 0;
   border: 0;
   background: none;
   color: var(--ink);
+  display: flex;
+  align-items: center;
+  gap: 10px;
   font-size: 18px;
   font-weight: 780;
   cursor: pointer;
   text-decoration: none;
+}
+/* 포스터 원본에서 배경을 걷어낸 ㅊㅊㅊ 마크. 마스크라 어디서든 색을 입힐 수 있습니다. */
+.ccc-mark {
+  width: 62px;
+  height: 24px;
+  flex: 0 0 auto;
+  background: currentColor;
+  mask: url("/brand/ccc-logo.png") no-repeat center / contain;
+  -webkit-mask: url("/brand/ccc-logo.png") no-repeat center / contain;
+}
+.partner-lockup {
+  margin: 0;
+  display: inline-flex;
+  align-items: center;
+  gap: 9px;
+  color: var(--muted);
+}
+.partner-nuvook {
+  font-size: 13px;
+  font-weight: 700;
+  letter-spacing: -0.02em;
+}
+.partner-divider {
+  width: 1px;
+  height: 11px;
+  background: currentColor;
+  opacity: 0.5;
+}
+.partner-llg {
+  font-size: 11px;
+  font-weight: 650;
+  letter-spacing: 0.05em;
+}
+/* 포스터의 큰 영문 카테고리: 가는 굵기, 크게, 자간 좁게 */
+.display-category {
+  margin: 0 0 6px;
+  color: var(--moss-deep);
+  font-size: clamp(38px, 5.6vw, 92px);
+  font-weight: 300;
+  letter-spacing: -0.035em;
+  line-height: 0.95;
+}
+/* 어깨번호 + 한글 세션명 */
+.session-line {
+  margin: 0 0 clamp(10px, 2vh, 22px);
+  color: var(--ink);
+  font-size: clamp(14px, 1.2vw, 18px);
+  font-weight: 500;
+}
+.session-line sup {
+  margin-right: 4px;
+  font-size: 0.68em;
+  font-weight: 700;
+}
+.session-line strong {
+  font-weight: 750;
+}
+/* 포스터의 크림 알약 칩 */
+.brand-chip {
+  display: inline-flex;
+  align-items: center;
+  padding: 7px 16px;
+  border-radius: 999px;
+  background: var(--cream);
+  color: var(--olive);
+  font-size: 14px;
+  font-weight: 700;
+}
+.finish-brand {
+  grid-column: 1 / -1;
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  color: var(--muted);
+}
+.finish-brand .ccc-mark {
+  width: 46px;
+  height: 18px;
 }
 .top-bar-actions {
   display: flex;
@@ -487,7 +711,7 @@ button {
   border: 1px solid var(--line);
   border-radius: 12px;
   background: #fff;
-  color: #444;
+  color: #4e4234;
   display: inline-flex;
   align-items: center;
   gap: 8px;
@@ -510,8 +734,8 @@ button {
   transform: scale(0.975);
 }
 .watch-link-button.is-copied {
-  border-color: var(--ink);
-  background: var(--ink);
+  border-color: var(--green);
+  background: var(--green);
   color: #fff;
 }
 .link-icon {
@@ -540,33 +764,34 @@ button {
 .top-divider {
   width: 1px;
   height: 13px;
-  background: #ccc;
+  background: #c4b9a8;
 }
 
 .lobby {
-  padding: clamp(28px, 4vw, 58px) clamp(24px, 4vw, 64px) 40px;
+  padding: clamp(16px, 2.6vh, 58px) clamp(24px, 4vw, 64px)
+    clamp(14px, 2.2vh, 40px);
   display: grid;
-  grid-template-rows: auto 1fr auto;
-  gap: 42px;
+  grid-template-rows: auto minmax(0, 1fr) auto;
+  gap: clamp(14px, 2.8vh, 42px);
 }
 .join-panel {
   display: flex;
   justify-content: space-between;
   align-items: center;
   gap: 36px;
-  padding-bottom: 40px;
+  padding-bottom: clamp(14px, 2.4vh, 40px);
   border-bottom: 1px solid var(--line);
 }
 .room-code {
   margin: -6px 0 0;
-  font-size: clamp(64px, 9vw, 142px);
+  font-size: clamp(48px, min(9vw, 13vh), 142px);
   line-height: 0.94;
   font-weight: 780;
   letter-spacing: 0.08em;
   font-variant-numeric: tabular-nums;
 }
 .join-help {
-  margin: 22px 0 0;
+  margin: clamp(8px, 1.6vh, 22px) 0 0;
   color: var(--muted);
   font-size: 16px;
 }
@@ -595,12 +820,14 @@ button {
 
 .players-section {
   min-height: 0;
+  display: flex;
+  flex-direction: column;
 }
 .section-heading {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  margin-bottom: 22px;
+  margin-bottom: clamp(10px, 1.8vh, 22px);
 }
 .section-heading h2 {
   margin: 0;
@@ -615,7 +842,7 @@ button {
   width: 54px;
   height: 54px;
   border-radius: 50%;
-  background: conic-gradient(var(--ink) var(--progress), #e8e8e5 0);
+  background: conic-gradient(var(--ink) var(--progress), #e8e1d4 0);
   display: grid;
   place-items: center;
 }
@@ -633,16 +860,20 @@ button {
 }
 
 .player-grid {
+  min-height: 0;
+  /* 한 화면에 담는 것이 원칙이고, 인원이 많을 때만 이 영역만 스크롤됩니다. */
+  overflow: auto;
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 12px;
+  align-content: start;
+  gap: clamp(8px, 1.2vh, 12px);
 }
 .player-card,
 .empty-player-card {
-  min-height: 96px;
+  min-height: clamp(62px, 9.5vh, 96px);
   border: 1px solid var(--line);
   border-radius: 22px;
-  padding: 20px;
+  padding: clamp(12px, 1.8vh, 20px) 20px;
   display: flex;
   align-items: center;
   gap: 18px;
@@ -662,11 +893,11 @@ button {
 }
 .player-card.is-disconnected {
   border-style: dashed;
-  background: #f7f7f5;
-  color: #777;
+  background: #f6f2ea;
+  color: #7c6e5e;
 }
 .player-index {
-  color: #8b8b8b;
+  color: #8c7e6d;
   font-size: 12px;
   font-variant-numeric: tabular-nums;
 }
@@ -684,11 +915,11 @@ button {
 }
 .player-card p {
   margin: 5px 0 0;
-  color: #787878;
+  color: #7c6e5e;
   font-size: 13px;
 }
 .player-card.is-ready p {
-  color: #bdbdbd;
+  color: #b6aa99;
 }
 .runner-lineup {
   margin-top: 10px;
@@ -700,12 +931,12 @@ button {
   display: inline-flex;
   align-items: center;
   gap: 5px;
-  color: #777;
+  color: #7c6e5e;
   font-size: 10px;
   font-weight: 650;
 }
 .player-card.is-ready .runner-lineup span {
-  color: #cfcfca;
+  color: #c9bfae;
 }
 .runner-lineup i {
   width: 7px;
@@ -713,7 +944,7 @@ button {
   border-radius: 50%;
 }
 .runner-lineup .runner-lineup-more {
-  color: #555;
+  color: #5e5142;
   font-weight: 750;
 }
 .player-actions {
@@ -727,10 +958,10 @@ button {
   padding: 0;
   border: 0;
   border-radius: 50%;
-  background: #ededeb;
+  background: #ebe4d8;
   display: grid;
   place-items: center;
-  color: #555;
+  color: #5e5142;
   cursor: pointer;
 }
 .more-icon {
@@ -741,7 +972,7 @@ button {
 }
 .status-mark:hover,
 .status-mark:focus-visible {
-  background: #dfdfdc;
+  background: #dcd2c1;
   outline: none;
 }
 .is-ready .status-mark {
@@ -765,7 +996,7 @@ button {
   border: 0;
   border-radius: 9px;
   background: transparent;
-  color: #9c1c1c;
+  color: #8e2b1e;
   font: inherit;
   font-size: 13px;
   font-weight: 650;
@@ -775,7 +1006,7 @@ button {
 }
 .player-menu button:hover,
 .player-menu button:focus-visible {
-  background: #f7eeee;
+  background: #f6e9e4;
   outline: none;
 }
 .player-menu button:disabled {
@@ -785,7 +1016,7 @@ button {
 .empty-player-card {
   grid-column: 1 / -1;
   justify-content: center;
-  color: #777;
+  color: #7c6e5e;
   min-height: 120px;
   position: relative;
   overflow: hidden;
@@ -794,7 +1025,7 @@ button {
   position: absolute;
   inset: 0 auto 0 0;
   width: 25%;
-  background: #f6f6f4;
+  background: #f4efe6;
   animation: scan 2.4s ease-in-out infinite;
 }
 .empty-player-card p {
@@ -806,7 +1037,7 @@ button {
   align-items: end;
   justify-content: space-between;
   gap: 40px;
-  padding-top: 20px;
+  padding-top: clamp(10px, 1.6vh, 20px);
 }
 .rule-copy {
   display: flex;
@@ -815,7 +1046,7 @@ button {
 }
 .rule-copy p {
   margin: 0;
-  color: #666;
+  color: #706355;
   font-size: 14px;
   line-height: 1.5;
 }
@@ -837,7 +1068,7 @@ button {
 .spectator-status {
   max-width: 440px;
   margin: 0;
-  color: #666;
+  color: #706355;
   font-size: 14px;
   line-height: 1.55;
   text-align: right;
@@ -867,42 +1098,97 @@ button {
   cursor: pointer;
 }
 
-.countdown {
-  position: relative;
-  min-height: calc(100vh - 78px);
-  padding: 40px;
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  text-align: center;
-}
-.countdown-end-control {
+/* 트랙을 미리 보여준 상태에서 출발 버튼/숫자만 위에 겹칩니다. */
+.stage-overlay,
+.countdown-overlay {
   position: absolute;
-  top: 28px;
-  right: clamp(24px, 4vw, 64px);
+  inset: 0;
+  z-index: 5;
+  display: grid;
+  place-items: center;
+  text-align: center;
+  background: color-mix(in srgb, var(--field) 52%, transparent);
+  backdrop-filter: blur(1px);
+  animation: countdown-veil 320ms var(--ease-out) both;
 }
-.countdown p {
+.countdown-overlay {
+  grid-auto-flow: row;
+  gap: 2px;
+}
+.countdown-overlay p {
   margin: 0;
-  color: #666;
+  padding: 5px 14px;
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--field) 90%, transparent);
+  color: var(--ink);
   font-size: 17px;
+  font-weight: 600;
 }
 .countdown-number {
   min-height: 0.9em;
-  margin: 4vh 0;
-  font-size: clamp(160px, 34vw, 520px);
+  margin: 2vh 0;
+  color: var(--track-ink);
+  font-size: clamp(120px, min(22vw, 40vh), 420px);
+  text-shadow: 0 0 46px color-mix(in srgb, var(--field) 92%, transparent);
   line-height: 0.78;
   font-weight: 800;
   letter-spacing: -0.09em;
   animation: countdown-pop 600ms var(--ease-out) both;
 }
-.countdown span {
+.countdown-overlay > span {
+  padding: 6px 16px;
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--field) 90%, transparent);
   font-size: 20px;
   font-weight: 650;
 }
 
+/* 경기·결과 화면에는 오류를 띄울 자리가 없어 실패가 조용히 묻혔습니다. */
+.error-toast {
+  position: fixed;
+  z-index: 60;
+  top: 90px;
+  left: 50%;
+  transform: translateX(-50%);
+  width: min(520px, calc(100vw - 32px));
+  padding: 14px 14px 14px 18px;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  border: 1px solid #d8b6ad;
+  border-radius: 16px;
+  background: #f6e9e4;
+  box-shadow: 0 14px 40px rgb(42 33 25 / 18%);
+  animation: toast-arrive 240ms var(--ease-out) both;
+}
+.error-toast p {
+  flex: 1;
+  margin: 0;
+  color: #8e2b1e;
+  font-size: 14px;
+  font-weight: 600;
+  line-height: 1.45;
+}
+.error-toast button {
+  width: 28px;
+  height: 28px;
+  flex: 0 0 auto;
+  border: 0;
+  border-radius: 50%;
+  background: transparent;
+  color: #8e2b1e;
+  font-size: 18px;
+  line-height: 1;
+  cursor: pointer;
+}
+.error-toast button:hover {
+  background: rgb(142 43 30 / 12%);
+}
+
 .race {
+  position: relative;
   padding: clamp(28px, 4vw, 56px) clamp(24px, 4vw, 64px) 30px;
+  background: var(--field);
   display: flex;
   flex-direction: column;
 }
@@ -918,14 +1204,12 @@ button {
   line-height: 1;
   letter-spacing: -0.055em;
 }
-.race.is-stadium .race-heading {
-  margin-bottom: clamp(12px, 1.8vh, 24px);
-}
 .race.is-stadium {
-  padding-bottom: 8px;
+  padding: clamp(10px, 1.4vh, 18px) clamp(16px, 2vw, 34px) clamp(8px, 1vh, 14px);
 }
-.race.is-stadium .race-heading h1 {
-  font-size: clamp(34px, 4vw, 62px);
+.race.is-stadium .race-heading {
+  align-items: center;
+  margin-bottom: clamp(8px, 1.2vh, 14px);
 }
 .race.is-stadium .race-instruction {
   display: none;
@@ -944,7 +1228,7 @@ button {
 }
 .leader-copy span {
   display: block;
-  color: #777;
+  color: #7c6e5e;
   font-size: 12px;
 }
 .leader-copy strong {
@@ -963,10 +1247,10 @@ button {
 .end-race-button {
   min-height: 44px;
   padding: 0 16px;
-  border: 1px solid #bdbdb9;
+  border: 1px solid #b6aa99;
   border-radius: 14px;
   background: #fff;
-  color: #555;
+  color: #5e5142;
   font-weight: 650;
   cursor: pointer;
   transition:
@@ -998,14 +1282,14 @@ button {
   right: 0;
   width: min(310px, calc(100vw - 40px));
   padding: 16px;
-  border: 1px solid #d8d8d3;
+  border: 1px solid #d5cab8;
   border-radius: 18px;
   background: #fff;
   box-shadow: 0 14px 40px rgb(0 0 0 / 14%);
 }
 .end-race-confirmation p {
   margin: 0 0 14px;
-  color: #3e3e3b;
+  color: #3d3327;
   font-size: 14px;
   line-height: 1.45;
 }
@@ -1021,9 +1305,9 @@ button {
   cursor: pointer;
 }
 .end-race-cancel {
-  border: 1px solid #d8d8d3;
+  border: 1px solid #d5cab8;
   background: #fff;
-  color: #555;
+  color: #5e5142;
 }
 .end-race-confirm {
   border: 1px solid var(--ink);
@@ -1057,7 +1341,7 @@ button {
 .lane-number {
   width: 34px;
   height: 34px;
-  border: 1px solid #bbb;
+  border: 1px solid #b0a493;
   border-radius: 50%;
   display: grid;
   place-items: center;
@@ -1072,7 +1356,7 @@ button {
 }
 .track-meta p {
   margin: 4px 0 0;
-  color: #777;
+  color: #7c6e5e;
   font-size: 12px;
 }
 .track-meta p strong {
@@ -1116,7 +1400,7 @@ button {
   height: 1px;
   background: repeating-linear-gradient(
     90deg,
-    #d0d0cd 0 1px,
+    #c9bfae 0 1px,
     transparent 1px 10%
   );
 }
@@ -1134,12 +1418,10 @@ button {
   width: 46px;
   height: 46px;
   transform: translate(-50%, -50%);
-  border-radius: 50%;
-  background: var(--runner-color, var(--ink));
   display: grid;
   place-items: center;
+  filter: drop-shadow(0 3px 7px rgb(42 33 25 / 30%));
   transition: left 220ms var(--ease-out);
-  animation: beat-arrive 220ms var(--ease-out);
   z-index: 2;
 }
 .track.is-handoff .racer:not(.next-racer) {
@@ -1152,26 +1434,36 @@ button {
   z-index: 3;
 }
 .racer .heart-solid {
-  width: 21px;
-  fill: #fff;
+  width: 34px;
+  fill: var(--runner-color, var(--ink));
+  stroke: #fff;
+  stroke-width: 2.4;
+  paint-order: stroke;
 }
-.racer-pulse {
+/* 박동마다 하트 자체가 커졌다 작아집니다. */
+.racer-beat {
+  display: grid;
+  place-items: center;
+  animation: beat-pop 520ms var(--ease-out) both;
+}
+.racer-beat strong {
   position: absolute;
-  inset: 0;
-  border: 1px solid #111;
-  border-radius: 50%;
-  animation: pulse-ring 420ms ease-out both;
+  margin-top: -3px;
+  color: #fff;
+  font-size: 13px;
+  font-weight: 800;
+  letter-spacing: -0.04em;
 }
-.racer.is-accent .racer-pulse {
-  animation: accent-ring 620ms var(--ease-out) both;
-  border-width: 2px;
+.racer.is-accent .racer-beat {
+  animation-name: beat-pop-accent;
+  animation-duration: 640ms;
 }
 .finish-line {
   position: absolute;
   right: -18px;
   top: 50%;
   transform: translate(100%, -50%) rotate(-90deg);
-  color: #888;
+  color: #8c7e6d;
   font-size: 9px;
   letter-spacing: 0.12em;
   text-transform: uppercase;
@@ -1184,13 +1476,13 @@ button {
   font-size: 28px;
 }
 .beat-score span {
-  color: #888;
+  color: #8c7e6d;
   font-size: 12px;
 }
 .beat-score small {
   display: flex;
   margin-top: 5px;
-  color: #777;
+  color: #7c6e5e;
   font-size: 10px;
   flex-direction: column;
   align-items: flex-end;
@@ -1201,7 +1493,7 @@ button {
   height: 3px;
   overflow: hidden;
   border-radius: 999px;
-  background: #e5e5e2;
+  background: #e5ddce;
 }
 .beat-score small b {
   display: block;
@@ -1211,149 +1503,182 @@ button {
   transition: width 220ms var(--ease-out);
 }
 .stadium-race {
+  --rank-row: clamp(30px, 4.4vh, 46px);
+  /* 좌우 열 폭이 같아야 트랙이 화면 중앙에 놓입니다. 순위표에 필요한 만큼만
+     남기고 나머지는 전부 트랙이 씁니다. */
+  --rail: clamp(112px, 10vw, 164px);
   min-height: 0;
   flex: 1;
   display: grid;
-  grid-template-rows: minmax(260px, 1fr) auto;
-  align-content: center;
-  gap: clamp(10px, 1.5vh, 18px);
+  grid-template-columns: var(--rail) minmax(0, 1fr) var(--rail);
+  grid-template-rows: minmax(0, 1fr) auto;
+  align-items: center;
+  gap: clamp(8px, 1.4vh, 16px) clamp(12px, 1.6vw, 26px);
 }
-.stadium-canvas {
+/* 순위표: DOM 순서는 레인으로 고정하고 translateY만 바꿔 순위가 부드럽게 오갑니다. */
+.rank-board {
   position: relative;
-  width: min(100%, 1080px, calc(52vh * 1.923));
-  aspect-ratio: 1000 / 520;
+  margin: 0;
+  padding: 0;
+  list-style: none;
   align-self: center;
-  justify-self: center;
-  isolation: isolate;
 }
-.stadium-canvas > svg {
+.rank-board li {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: var(--rank-row);
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  padding-right: 6px;
+  border-bottom: 1px solid color-mix(in srgb, var(--ink) 12%, transparent);
+  /* 박동 간격(빠르면 ~400ms)보다 짧아야 자리와 등수 표시가 어긋나 보이지 않습니다. */
+  transition: transform 260ms var(--ease-out);
+}
+.rank-board-place {
+  width: 22px;
+  height: 22px;
+  flex: 0 0 auto;
+  display: grid;
+  place-items: center;
+  border-radius: 50%;
+  background: var(--team-color);
+  color: #fff;
+  font-size: 11px;
+  font-weight: 800;
+  font-variant-numeric: tabular-nums;
+}
+.rank-board strong {
+  min-width: 0;
+  overflow: hidden;
+  color: var(--ink);
+  font-size: clamp(12px, 0.92vw, 16px);
+  font-weight: 700;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+/* 남은 세로 공간을 모두 트랙에 넘기고 SVG가 알아서 비율을 맞춥니다. */
+.stadium-field {
+  position: relative;
+  min-height: 0;
+  height: 100%;
+  grid-column: 2;
+  grid-row: 1;
+}
+.rank-board {
+  grid-column: 1;
+  grid-row: 1;
+}
+.stadium-field > svg {
+  position: absolute;
+  inset: 0;
   display: block;
   width: 100%;
   height: 100%;
-  overflow: visible;
 }
 .stadium-outer {
-  fill: #ef6259;
-  stroke: #cbd6d8;
+  fill: var(--track);
+  stroke: #f0e4da;
   stroke-width: 9;
+}
+.stadium-lane-trail {
+  fill: none;
+  opacity: 0.88;
+  transition: stroke-dashoffset 230ms var(--ease-out);
 }
 .stadium-lane-line {
   fill: none;
-  stroke: #cce8ef;
+  stroke: #fff;
   stroke-width: 3;
+  opacity: 0.7;
 }
 .stadium-infield {
-  fill: #b7ca4b;
-  stroke: #718f39;
+  fill: var(--turf);
+  stroke: #c2d585;
   stroke-width: 8;
 }
-.stadium-guide {
-  fill: none;
-  stroke: rgb(255 255 255 / 28%);
-  stroke-width: 10;
-  stroke-dasharray: 3 9;
-}
-.stadium-finish-check {
-  stroke: #111;
-  stroke-width: 2;
-}
-.stadium-finish-post {
-  fill: none;
-  stroke: #333;
+.stadium-lane-label {
+  fill: #fff;
+  dominant-baseline: central;
+  font-weight: 700;
+  letter-spacing: -0.02em;
+  paint-order: stroke;
+  stroke: rgb(0 0 0 / 20%);
   stroke-width: 3;
 }
-.stadium-finish-label-bg {
-  fill: #3e3e42;
-  stroke: #171719;
+.stadium-lane-label-number {
+  font-weight: 800;
+  opacity: 0.78;
+}
+.stadium-finish-check {
+  stroke: #2a2119;
   stroke-width: 2;
 }
 .stadium-finish-label {
-  fill: #fff;
-  font-size: 24px;
+  fill: var(--track-ink);
+  dominant-baseline: central;
+  font-size: 23px;
   font-weight: 800;
-  letter-spacing: 0.04em;
+  letter-spacing: 0.06em;
+  text-anchor: end;
+}
+/* 출발 대기·카운트다운 오버레이와 겹치므로 그동안은 비웁니다. */
+.race.is-counting .stadium-infield-note {
+  opacity: 0;
+}
+.stadium-infield-note {
+  fill: var(--track-ink);
+  transition: opacity 200ms ease;
+  dominant-baseline: central;
+  font-size: 21px;
+  font-weight: 700;
   text-anchor: middle;
 }
 .stadium-racer {
-  position: absolute;
-  width: 40px;
-  height: 40px;
-  transform: translate(-50%, -50%);
-  border: 4px solid var(--runner-color, #fff);
-  border-radius: 50%;
-  background: var(--team-color, var(--ink));
-  display: grid;
-  place-items: center;
-  box-shadow:
-    0 5px 14px rgb(0 0 0 / 23%),
-    inset 0 0 0 2px rgb(255 255 255 / 55%);
-  transition:
-    left 230ms var(--ease-out),
-    top 230ms var(--ease-out);
+  transition: transform 230ms var(--ease-out);
 }
-.stadium-racer .heart-solid {
-  width: 18px;
+.stadium-racer-mark {
+  transform-box: fill-box;
+  transform-origin: center;
+  animation: stadium-beat-pop 520ms var(--ease-out) both;
+}
+.stadium-racer-heart {
+  stroke: #fff;
+  paint-order: stroke;
+  filter: drop-shadow(0 3px 7px rgb(42 33 25 / 34%));
+}
+.stadium-racer-number {
   fill: #fff;
+  dominant-baseline: central;
+  font-weight: 800;
+  letter-spacing: -0.04em;
+  text-anchor: middle;
 }
-.stadium-racer > strong {
-  position: absolute;
-  left: 50%;
-  top: calc(100% + 7px);
-  transform: translateX(-50%);
-  max-width: 86px;
-  padding: 3px 6px;
-  border-radius: 999px;
-  background: rgb(255 255 255 / 90%);
-  color: #222;
-  font-size: 9px;
-  line-height: 1;
-  white-space: nowrap;
-  box-shadow: 0 2px 8px rgb(0 0 0 / 10%);
+.stadium-racer.is-accent .stadium-racer-mark {
+  animation-name: stadium-beat-pop-accent;
+  animation-duration: 640ms;
 }
-.stadium-racer.is-packed {
-  width: 36px;
-  height: 36px;
-}
-.stadium-racer.is-packed .heart-solid {
-  width: 16px;
-}
-.stadium-racer.is-packed > strong {
-  display: none;
-}
-.stadium-racer.is-accent .racer-pulse {
-  border-width: 2px;
-  animation: accent-ring 620ms var(--ease-out) both;
-}
-.stadium-racer.is-handoff {
+.stadium-racer.is-handoff .stadium-racer-mark {
   animation: stadium-handoff-pulse 900ms ease-in-out infinite alternate;
 }
-.stadium-next-racer {
-  opacity: 0.62;
-  transform: translate(-50%, -50%) scale(0.82);
-  animation: next-runner-arrive 260ms var(--ease-out) both;
+.stadium-next-racer .stadium-racer-mark {
+  animation: none;
+  opacity: 0.66;
 }
-.stadium-infield-copy {
-  position: absolute;
-  left: 50%;
-  top: 50%;
-  transform: translate(-50%, -50%);
-  color: #526527;
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  gap: 6px;
-  text-align: center;
+.stadium-next-racer .stadium-racer-heart {
+  stroke-dasharray: 4 3;
 }
-.stadium-infield-copy span {
-  font-size: 10px;
-  font-weight: 800;
-  letter-spacing: 0.16em;
-}
-.stadium-infield-copy strong {
-  font-size: clamp(12px, 1.2vw, 17px);
+.stadium-baton {
+  stroke-linecap: round;
+  stroke-dasharray: 2 7;
+  opacity: 0.9;
 }
 .stadium-scoreboard {
-  width: min(100%, 1080px);
+  width: min(100%, 1400px);
+  grid-column: 1 / -1;
+  grid-row: 2;
   margin: 0 auto;
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
@@ -1361,83 +1686,75 @@ button {
 }
 .stadium-team-card {
   min-width: 0;
-  padding: 11px 13px 10px;
+  padding: 8px 14px 10px;
   border: 1px solid var(--line);
-  border-top: 4px solid var(--team-color);
+  border-top: 5px solid var(--team-color);
   border-radius: 14px;
   background: #fff;
+  display: grid;
+  justify-items: center;
+  gap: 1px;
 }
-.stadium-team-card > div {
+.stadium-team-card header {
+  max-width: 100%;
   display: flex;
   align-items: center;
-  gap: 8px;
+  gap: 6px;
 }
-.stadium-team-rank {
-  width: 22px;
-  height: 22px;
+.stadium-team-lane {
+  width: 18px;
+  height: 18px;
   flex: 0 0 auto;
+  display: grid;
+  place-items: center;
   border-radius: 50%;
   background: var(--team-color);
   color: #fff;
-  display: grid;
-  place-items: center;
   font-size: 10px;
   font-weight: 800;
 }
 .stadium-team-card h2 {
   margin: 0;
   overflow: hidden;
-  font-size: 15px;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-.stadium-team-card p {
-  margin: 6px 0 8px;
-  overflow: hidden;
-  color: #666;
-  font-size: 10px;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-.stadium-team-card p strong {
-  color: var(--ink);
+  color: var(--muted);
   font-size: 13px;
+  font-weight: 650;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
-.stadium-team-card footer {
-  display: grid;
-  grid-template-columns: 1fr auto;
-  gap: 4px 10px;
-  color: #777;
-  font-size: 9px;
+.stadium-team-bpm {
+  color: var(--ink);
+  font-size: clamp(38px, 4.2vw, 76px);
+  font-weight: 800;
+  font-variant-numeric: tabular-nums;
+  letter-spacing: -0.06em;
+  line-height: 1;
 }
-.stadium-team-card footer i {
-  height: 3px;
-  overflow: hidden;
-  grid-column: 1 / -1;
-  border-radius: 99px;
-  background: #e8e8e5;
+.stadium-team-unit {
+  color: var(--muted);
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.06em;
 }
-.stadium-team-card footer b {
-  display: block;
-  height: 100%;
-  border-radius: inherit;
-  background: var(--team-color);
-  transition: width 230ms var(--ease-out);
+.stadium-team-card.is-handoff .stadium-team-bpm {
+  color: #b6aa99;
+}
+.stadium-team-card.is-handoff .stadium-team-unit {
+  color: var(--team-color);
 }
 .race-instruction {
   margin: 26px 0 0;
-  color: #777;
+  color: #7c6e5e;
   font-size: 13px;
   text-align: center;
 }
 
 .finish {
-  min-height: calc(100vh - 78px);
-  padding: clamp(34px, 5vw, 80px);
+  padding: clamp(20px, 3.4vh, 72px) clamp(28px, 5vw, 80px);
   display: grid;
   grid-template-columns: 1fr minmax(320px, 38vw);
-  grid-template-rows: auto 1fr auto;
-  gap: 24px 8vw;
+  grid-template-rows: auto minmax(0, 1fr) auto;
+  gap: clamp(14px, 2vh, 24px) 8vw;
 }
 .finish > .eyebrow {
   grid-column: 1 / -1;
@@ -1447,14 +1764,36 @@ button {
 }
 .finish-title h1 {
   margin: 28px 0 0;
-  font-size: clamp(46px, 6.5vw, 104px);
+  font-size: clamp(52px, 7.4vw, 124px);
   line-height: 0.98;
   letter-spacing: -0.065em;
 }
+/* 우승 팀 이름이 결과 문장보다 먼저 읽히도록 위계를 벌립니다. */
+.finish-winner {
+  display: block;
+  font-size: 1em;
+  font-weight: 800;
+  text-wrap: balance;
+}
+.finish-outcome {
+  display: block;
+  margin-top: 0.24em;
+  color: #736553;
+  font-size: 0.36em;
+  font-weight: 600;
+  letter-spacing: -0.03em;
+  line-height: 1.24;
+  text-wrap: balance;
+}
 .finish-title p {
-  margin: 28px 0 0;
-  color: #656565;
+  margin: 24px 0 0;
+  color: #6e6153;
   font-size: 18px;
+}
+.finish-title p strong {
+  color: var(--ink);
+  font-size: 24px;
+  font-weight: 750;
 }
 .finish-heart {
   width: 64px;
@@ -1462,7 +1801,7 @@ button {
   display: grid;
   place-items: center;
   border-radius: 50%;
-  background: var(--ink);
+  background: var(--green);
   animation: winner-beat 1.3s ease-in-out infinite;
 }
 .finish-heart svg {
@@ -1471,13 +1810,17 @@ button {
 }
 .ranking-list {
   align-self: center;
+  max-height: 100%;
+  overflow: auto;
   list-style: none;
   margin: 0;
   padding: 0;
   border-top: 1px solid var(--ink);
 }
 .ranking-list li {
-  min-height: 76px;
+  min-height: clamp(46px, 7vh, 76px);
+}
+.ranking-list li {
   display: grid;
   grid-template-columns: 44px 1fr auto;
   gap: 16px;
@@ -1494,12 +1837,17 @@ button {
   font-weight: 750;
 }
 .ranking-list li:first-child .ranking-place {
-  background: var(--ink);
+  background: var(--green);
   color: #fff;
 }
 .ranking-list li > span:last-child {
-  color: #777;
+  color: #7c6e5e;
   font-size: 13px;
+}
+.ranking-bpm b {
+  color: var(--ink);
+  font-size: 18px;
+  font-weight: 750;
 }
 .finish > .primary-button {
   justify-self: start;
@@ -1541,48 +1889,18 @@ button {
   }
 }
 @keyframes countdown-pop {
+  /* 트랙 위에 겹치므로 흐릿한 구간 없이 빠르게 불투명해집니다. */
   0% {
     opacity: 0;
     transform: scale(0.72);
   }
-  45% {
+  18% {
     opacity: 1;
-    transform: scale(1.04);
+    transform: scale(1.06);
   }
   100% {
     opacity: 1;
     transform: scale(1);
-  }
-}
-@keyframes beat-arrive {
-  0% {
-    transform: translate(-50%, -50%) scale(0.82);
-  }
-  70% {
-    transform: translate(-50%, -50%) scale(1.12);
-  }
-  100% {
-    transform: translate(-50%, -50%) scale(1);
-  }
-}
-@keyframes pulse-ring {
-  from {
-    opacity: 0.5;
-    transform: scale(1);
-  }
-  to {
-    opacity: 0;
-    transform: scale(1.7);
-  }
-}
-@keyframes accent-ring {
-  0% {
-    opacity: 0.65;
-    transform: scale(0.85);
-  }
-  100% {
-    opacity: 0;
-    transform: scale(2.4);
   }
 }
 @keyframes winner-beat {
@@ -1622,12 +1940,103 @@ button {
   }
 }
 
-@keyframes stadium-handoff-pulse {
+@keyframes beat-pop {
+  0% {
+    transform: scale(1);
+  }
+  24% {
+    transform: scale(1.18);
+  }
+  100% {
+    transform: scale(1);
+  }
+}
+
+@keyframes beat-pop-accent {
+  0% {
+    transform: scale(1);
+  }
+  24% {
+    transform: scale(1.4);
+  }
+  100% {
+    transform: scale(1);
+  }
+}
+
+.stage-overlay {
+  /* 이 화면의 목적은 트랙을 보여 주는 것이라 베일을 거의 걷습니다. */
+  background: color-mix(in srgb, var(--field) 22%, transparent);
+  backdrop-filter: none;
+}
+.stage-start {
+  min-height: 68px;
+  padding: 0 34px;
+  font-size: 20px;
+}
+/* 안내 문구가 버튼을 밀어내지 않도록 흐름에서 빼고 아래에 띄웁니다. */
+.stage-hint {
+  position: absolute;
+  top: calc(50% + 58px);
+  margin: 0;
+  padding: 5px 14px;
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--field) 90%, transparent);
+  color: var(--ink);
+  font-size: 15px;
+  font-weight: 600;
+}
+
+@keyframes toast-arrive {
   from {
-    transform: translate(-50%, -50%) scale(0.92);
+    opacity: 0;
+    transform: translate(-50%, -12px);
   }
   to {
-    transform: translate(-50%, -50%) scale(1.06);
+    opacity: 1;
+    transform: translate(-50%, 0);
+  }
+}
+
+@keyframes countdown-veil {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+@keyframes stadium-handoff-pulse {
+  from {
+    transform: scale(0.9);
+  }
+  to {
+    transform: scale(1.08);
+  }
+}
+
+@keyframes stadium-beat-pop {
+  0% {
+    transform: scale(1);
+  }
+  24% {
+    transform: scale(1.18);
+  }
+  100% {
+    transform: scale(1);
+  }
+}
+
+@keyframes stadium-beat-pop-accent {
+  0% {
+    transform: scale(1);
+  }
+  24% {
+    transform: scale(1.4);
+  }
+  100% {
+    transform: scale(1);
   }
 }
 
@@ -1694,27 +2103,8 @@ button {
   .race.is-stadium {
     padding-inline: 14px;
   }
-  .race.is-stadium .race-heading h1 {
-    font-size: clamp(28px, 8vw, 42px);
-  }
-  .stadium-race {
-    grid-template-rows: auto auto;
-  }
-  .stadium-canvas {
-    width: 100%;
-  }
-  .stadium-racer {
-    width: 34px;
-    height: 34px;
-    border-width: 3px;
-  }
-  .stadium-racer .heart-solid {
-    width: 15px;
-  }
-  .stadium-racer > strong {
-    top: calc(100% + 4px);
-    padding: 2px 4px;
-    font-size: 7px;
+  .stadium-field {
+    min-height: 40vh;
   }
   .stadium-scoreboard {
     grid-template-columns: repeat(2, minmax(0, 1fr));
@@ -1730,10 +2120,6 @@ button {
     flex-direction: column;
     align-items: flex-end;
     gap: 12px;
-  }
-  .countdown-end-control {
-    top: 20px;
-    right: 20px;
   }
   .finish {
     display: flex;

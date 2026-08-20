@@ -1206,9 +1206,9 @@ function FinishScreen({
                 : "당신의 심장이\n완주했어요"}
         </Text>
         <Text style={styles.finishBody}>
-          {player?.beatCount ?? 0}번의 박동
+          최고 심박수 {formatMaxBpm(player?.maxBpm)} BPM
           {manuallyEnded
-            ? "에서 호스트가 경기를 종료했습니다."
+            ? " · 호스트가 경기를 종료했습니다."
             : "으로 결승선을 통과했습니다."}
         </Text>
       </View>
@@ -1231,7 +1231,9 @@ function FinishScreen({
               {item.nickname}
               {item.id === playerId ? " · 나" : ""}
             </Text>
-            <Text style={styles.finishRankingBeats}>{item.beatCount} 박동</Text>
+            <Text style={styles.finishRankingBpm}>
+              최고 {formatMaxBpm(item.maxBpm)} BPM
+            </Text>
           </View>
         ))}
       </View>
@@ -1425,6 +1427,10 @@ function ConnectionDot({ connected }: { connected: boolean }) {
       style={[styles.connectionDot, !connected && styles.connectionDotOffline]}
     />
   );
+}
+
+function formatMaxBpm(bpm: number | null | undefined): string {
+  return bpm == null ? "—" : String(bpm);
 }
 
 function findPlayer(room: RoomSnapshot, playerId: string) {
@@ -2080,7 +2086,7 @@ const styles = StyleSheet.create({
     fontSize: 14,
   },
   finishRankingMe: { color: colors.ink, fontFamily: fonts.bold },
-  finishRankingBeats: {
+  finishRankingBpm: {
     color: colors.muted,
     fontFamily: fonts.regular,
     fontSize: 12,
