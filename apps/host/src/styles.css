@@ -19,6 +19,8 @@
   --olive: #3e3b1b;
   --olive-soft: #565232;
   --cream: #fbfbee;
+  --brand-brown: #3e1f0f;
+  --brand-ivory: #fbfaec;
 
   --ink: #3e3b1b;
   --muted: #6f6a4a;
@@ -83,6 +85,15 @@ button {
   color: #5e5142;
   font-size: 14px;
   font-weight: 600;
+}
+.home-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px 28px;
+}
+.home-header .home-kicker {
+  justify-content: flex-end;
 }
 
 .live-dot {
@@ -393,10 +404,7 @@ button {
 }
 .public-wordmark {
   align-self: flex-start;
-  color: var(--ink);
-  font-size: 18px;
-  font-weight: 780;
-  text-decoration: none;
+  flex: 0 0 auto;
 }
 .public-page-copy {
   margin-top: clamp(76px, 14vh, 150px);
@@ -655,27 +663,48 @@ button {
 .app-shell.is-immersive .top-bar:focus-within {
   transform: translateY(0);
 }
-.wordmark {
+.brand-home-link {
   padding: 0;
   border: 0;
   background: none;
   color: var(--ink);
   display: flex;
   align-items: center;
-  gap: 10px;
+  /* 기존 ㅊㅊㅊ–텍스트 시작 위치는 유지하고, 추가된 ⓒ가 기존 여백 안에 놓입니다. */
+  gap: 2px;
   font-size: 18px;
   font-weight: 780;
-  cursor: pointer;
   text-decoration: none;
 }
-/* 포스터 원본에서 배경을 걷어낸 ㅊㅊㅊ 마크. 마스크라 어디서든 색을 입힐 수 있습니다. */
+.brand-home-link:hover,
+.brand-home-link:focus-visible {
+  color: var(--ink);
+  outline: none;
+}
+.brand-home-link:focus-visible {
+  border-radius: 6px;
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--ink) 24%, transparent);
+}
+.brand-home-link.is-light {
+  color: var(--brand-ivory);
+}
+.wordmark {
+  flex: 0 0 auto;
+}
+/* 첨부된 공식 로고 두 버전의 투명 알파를 마스크로 사용해 텍스트와 한 색으로 맞춥니다. */
 .ccc-mark {
-  width: 62px;
+  /* ⓒ까지 24px 높이에 맞춰 ㅊㅊㅊ 본체가 기존 62×24px 마크와 같은 크기로 보입니다. */
+  width: 70px;
   height: 24px;
   flex: 0 0 auto;
   background: currentColor;
-  mask: url("/brand/ccc-logo.png") no-repeat center / contain;
-  -webkit-mask: url("/brand/ccc-logo.png") no-repeat center / contain;
+  transform: translateY(1px);
+  mask: url("/brand/ccc-logo-dark.png") no-repeat center / contain;
+  -webkit-mask: url("/brand/ccc-logo-dark.png") no-repeat center / contain;
+}
+.ccc-mark.is-light {
+  mask-image: url("/brand/ccc-logo-light.png");
+  -webkit-mask-image: url("/brand/ccc-logo-light.png");
 }
 .partner-lockup {
   margin: 0;
@@ -743,7 +772,7 @@ button {
   color: var(--muted);
 }
 .finish-brand .ccc-mark {
-  width: 46px;
+  width: 52px;
   height: 18px;
 }
 .top-bar-actions {
@@ -1258,13 +1287,51 @@ button {
   flex-direction: column;
 }
 .race-heading {
+  position: relative;
+  z-index: 6;
   display: flex;
   justify-content: space-between;
   align-items: end;
   margin-bottom: clamp(28px, 4vh, 54px);
 }
-.race-heading h1 {
+.race-heading-copy {
+  min-width: 0;
+}
+.race-brand-status {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+.race-wordmark {
+  display: none;
+}
+.race-status-divider {
+  display: none;
+  width: 1px;
+  height: 22px;
+  flex: 0 0 auto;
+  background: color-mix(in srgb, var(--brand-brown) 28%, transparent);
+}
+.app-shell.is-immersive .race-wordmark {
+  display: flex;
+}
+.app-shell.is-immersive .race-status-divider {
+  display: block;
+}
+.race-wordmark,
+.race-wordmark:hover,
+.race-wordmark:focus-visible {
+  color: var(--brand-brown);
+}
+.race-brand-status .eyebrow {
   margin: 0;
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  white-space: nowrap;
+}
+.race-heading h1 {
+  margin: 18px 0 0;
   font-size: clamp(36px, 5vw, 74px);
   line-height: 1;
   letter-spacing: -0.055em;
@@ -2112,6 +2179,13 @@ button {
   .home h1 {
     font-size: clamp(42px, 12vw, 72px);
   }
+  .home-header {
+    align-items: flex-start;
+    flex-wrap: wrap;
+  }
+  .home-header .home-kicker {
+    justify-content: flex-start;
+  }
   .home-action,
   .lobby-footer,
   .join-panel {
@@ -2145,6 +2219,17 @@ button {
   }
   .top-bar-actions {
     gap: 10px;
+  }
+  .top-bar {
+    padding-inline: 14px;
+  }
+  .top-bar .brand-home-link {
+    gap: 7px;
+    font-size: 13px;
+  }
+  .top-bar .ccc-mark {
+    width: 58px;
+    height: 20px;
   }
   .watch-link-button {
     width: 38px;
@@ -2181,6 +2266,17 @@ button {
   .race-heading {
     align-items: flex-start;
     gap: 20px;
+  }
+  .race-brand-status {
+    flex-wrap: wrap;
+    gap: 8px 10px;
+  }
+  .race-wordmark {
+    font-size: 13px;
+  }
+  .race-wordmark .ccc-mark {
+    width: 62px;
+    height: 22px;
   }
   .race-actions {
     flex-direction: column;

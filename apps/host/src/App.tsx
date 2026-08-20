@@ -236,6 +236,7 @@ function HostApp({ demo = false }: { demo?: boolean }) {
           onStart={startRace}
           onLeaveStage={() => setStaged(false)}
           onEnd={room.phase === "countdown" ? resetRace : endRace}
+          onHome={leaveRoom}
         />
       )}
       {room.phase === "finished" && (
@@ -370,9 +371,7 @@ function SpectatorNotice({
 }) {
   return (
     <main className="public-page spectator-notice page-enter">
-      <a className="public-wordmark" href="/">
-        심장 달리기
-      </a>
+      <BrandHomeLink className="public-wordmark" />
       <div>
         <p className="eyebrow">LIVE SPECTATOR</p>
         <h1>{title}</h1>
@@ -401,9 +400,7 @@ function JoinLanding() {
 
   return (
     <main className="public-page join-landing page-enter">
-      <a className="public-wordmark" href="/">
-        심장 달리기
-      </a>
+      <BrandHomeLink className="public-wordmark" />
       <div className="public-page-copy">
         <p className="eyebrow">HEART RACE</p>
         <h1>
@@ -523,9 +520,7 @@ function PublicDocument({
 }) {
   return (
     <main className="public-page public-document page-enter">
-      <a className="public-wordmark" href="/">
-        심장 달리기
-      </a>
+      <BrandHomeLink className="public-wordmark" />
       <article>
         <p className="eyebrow">HEART RACE</p>
         <h1>{title}</h1>
@@ -587,11 +582,18 @@ function Home({
 
   return (
     <main className={`home page-enter ${demo ? "is-demo" : ""}`}>
-      <div className="home-kicker">
-        <LiveDot live={connected} />
-        {demo ? "휴대폰 없는 리허설" : "《ㅊㅊㅊ 운동회》 나를 찾는 운동회"}
-        <PartnerLockup />
-      </div>
+      <header className="home-header">
+        <BrandHomeLink />
+        <div className="home-kicker">
+          {demo && (
+            <>
+              <LiveDot live={connected} />
+              휴대폰 없는 리허설
+            </>
+          )}
+          <PartnerLockup />
+        </div>
+      </header>
       <div className="home-copy">
         <p className="display-category">{demo ? "REHEARSAL" : "PHYSICAL"}</p>
         <p className="session-line">
@@ -912,17 +914,7 @@ function TopBar({
         </button>
       )}
       <header className="top-bar">
-        {onLeave ? (
-          <button className="wordmark" onClick={onLeave} aria-label="처음으로">
-            <CccMark />
-            <span>0km 이어달리기</span>
-          </button>
-        ) : (
-          <a className="wordmark" href="/">
-            <CccMark />
-            <span>0km 이어달리기</span>
-          </a>
-        )}
+        <BrandHomeLink className="wordmark" onNavigate={onLeave} />
         <div className="top-bar-actions">
           {watchUrl && (
             <button
@@ -1247,6 +1239,7 @@ function Race({
   onEnd,
   onStart,
   onLeaveStage,
+  onHome,
   staged = false,
   countingDown = false,
   readOnly = false,
@@ -1257,6 +1250,7 @@ function Race({
   onEnd: () => void;
   onStart?: () => void;
   onLeaveStage?: () => void;
+  onHome?: () => void;
   staged?: boolean;
   countingDown?: boolean;
   readOnly?: boolean;
@@ -1291,17 +1285,21 @@ function Race({
       }`}
     >
       <div className="race-heading">
-        <div>
-          <p className="eyebrow">
-            <span className="recording-dot" />{" "}
-            {staged
-              ? "출발 대기"
-              : countingDown
-                ? "출발 준비"
-                : room.demo
-                  ? "모의 경기 중"
-                  : "경기 중"}
-          </p>
+        <div className="race-heading-copy">
+          <div className="race-brand-status">
+            <BrandHomeLink className="race-wordmark" onNavigate={onHome} />
+            <span className="race-status-divider" aria-hidden="true" />
+            <p className="eyebrow">
+              <span className="recording-dot" />
+              {staged
+                ? "출발 대기"
+                : countingDown
+                  ? "출발 준비"
+                  : room.demo
+                    ? "모의 경기 중"
+                    : "경기 중"}
+            </p>
+          </div>
           {!isStadiumRace && (
             <h1>
               {room.demo
@@ -2027,11 +2025,49 @@ function PartnerLockup() {
   );
 }
 
-/** 세 개의 ㅊ 마크. 포스터 원본에서 배경을 걷어낸 뒤 마스크로 씁니다. */
-function CccMark({ className = "" }: { className?: string }) {
+/** 모든 웹 화면에서 홈으로 이어지는 공식 브랜드 락업입니다. */
+function BrandHomeLink({
+  className = "",
+  onNavigate,
+  tone = "dark",
+}: {
+  className?: string;
+  onNavigate?: (() => void) | undefined;
+  tone?: "dark" | "light";
+}) {
+  const navigateHome: React.MouseEventHandler<HTMLAnchorElement> | undefined =
+    onNavigate
+      ? (event) => {
+          event.preventDefault();
+          onNavigate();
+          window.location.assign("/");
+        }
+      : undefined;
+
+  return (
+    <a
+      className={`brand-home-link ${tone === "light" ? "is-light" : ""} ${className}`}
+      href="/"
+      aria-label="0km 이어달리기 홈으로"
+      onClick={navigateHome}
+    >
+      <CccMark tone={tone} />
+      <span>0km 이어달리기</span>
+    </a>
+  );
+}
+
+/** 첨부된 공식 로고의 배경을 제거한 어두운색·밝은색 버전입니다. */
+function CccMark({
+  className = "",
+  tone = "dark",
+}: {
+  className?: string;
+  tone?: "dark" | "light";
+}) {
   return (
     <span
-      className={`ccc-mark ${className}`}
+      className={`ccc-mark ${tone === "light" ? "is-light" : ""} ${className}`}
       role="img"
       aria-label="ㅊㅊㅊ 운동회"
     />
