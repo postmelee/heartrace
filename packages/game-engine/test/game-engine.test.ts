@@ -403,6 +403,19 @@ describe("심박 경주 규칙", () => {
     expect(firstTeam.relay?.activeRunnerIndex).toBe(1);
     expect(firstTeam.relay?.completedRunners).toBe(2);
     expect(firstTeam.distanceRatio).toBe(1);
+
+    const afterFinish = acceptBeat(
+      room,
+      firstTeam.id,
+      beat(21, { detectedAt: 27_000 }),
+      27_000,
+    );
+    expect(afterFinish).toMatchObject({
+      accepted: false,
+      reason: "finished",
+      beatCount: 20,
+    });
+    expect(firstTeam.beatCount).toBe(20);
   });
 
   it("원형 트랙은 주자마다 한 바퀴를 완주하고 다음 랩으로 전환한다", () => {
