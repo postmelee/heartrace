@@ -39,6 +39,7 @@ packages/protocol     공유 이벤트·상태 타입
 packages/game-engine  서버 권위형 경기 규칙
 packages/ppg-core     기기 독립 PPG 신호 처리
 scripts/smoke-race.ts 실제 Socket.IO 전체 경기 스모크 테스트
+scripts/simulate-hybrid-relay.ts 실제 휴대폰과 가상 팀의 혼합 릴레이 테스트
 ```
 
 앱과 웹은 모두 Pretendard를 사용하며 큰 숫자 위계를 중심으로 구성했습니다. 호스트 웹의 디자인 토큰은 《ㅊㅊㅊ 운동회》 포스터에서 뽑았습니다 — 잔디 모스 그린 `#9b9443`, 딥 올리브 `#3e3b1b`, 크림 `#fbfbee`. 타이포그래피도 포스터 카드의 위계를 따라 가는 굵기의 큰 영문 카테고리(`PHYSICAL`), 어깨번호 + 한글 세션명, 크림 알약 칩으로 구성했습니다. ㅊㅊㅊ 마크는 포스터 원본에서 배경을 걷어내 `apps/host/public/brand/ccc-logo.png`로 두고 CSS 마스크로 색을 입힙니다. 경기 화면의 트랙만은 따로 지정받은 Spiced Clay(`#bf673c`) 주로와 연둣빛 인필드(`#dceca1`)를 `#e6dad1` 바탕 위에 유지하고, 팀을 구분하는 여섯 레인 색도 채도를 낮춘 채 따로 둡니다. 애니메이션은 상태 설명에만 사용하고 운영체제의 `reduce motion` 설정을 존중합니다.
@@ -108,6 +109,25 @@ npm run smoke:relay
 ```
 
 스모크 테스트는 방 생성, 두 참가자 입장/준비, 카운트다운, 각 10박동, 1·2위 확정, 매 3번째 강조를 실제 WebSocket으로 검사합니다. 다른 서버 주소는 `SMOKE_SOCKET_URL`로 지정합니다.
+
+### 휴대폰 1대와 가상 팀의 혼합 경기
+
+일반 팀 이어달리기 방에 실제 휴대폰이 먼저 입장한 뒤, 빈 팀 슬롯을 가상 팀으로
+채울 수 있습니다. 가상 팀도 앱과 동일한 참가·측정·박동 이벤트를 보내므로 서버의
+바톤 전환, 순위 및 경기 종료 로직은 그대로 사용합니다.
+
+```bash
+# 로컬 서버
+npm run simulate:hybrid-relay -- ABCD
+
+# 배포 서버
+SMOKE_SOCKET_URL=https://socket.example.com \
+  npm run simulate:hybrid-relay -- ABCD
+```
+
+스크립트 실행 전에 휴대폰 팀이 방에 입장해야 하며, 실행 후에는 호스트 화면에서
+경기를 시작합니다. 시뮬레이터 터미널은 경기가 끝날 때까지 열어 둡니다. 예를 들어
+4팀 방에 휴대폰 1팀이 들어와 있으면 나머지 3팀을 자동으로 만들고 준비시킵니다.
 
 ## 전시 배포 권장안
 

@@ -268,6 +268,10 @@ export function acceptBeat(
   if (!player) return rejected("unknown_player", 0);
   if (room.phase === "finished") return rejected("finished", player.beatCount);
   if (room.phase !== "racing") return rejected("not_racing", player.beatCount);
+  // 팀의 순위가 확정된 뒤에는 다른 팀의 완주를 기다리는 동안 들어오는 박동이
+  // 기록을 목표치 이상으로 늘리지 않도록 서버에서 최종 차단합니다.
+  if (player.finishPlace !== null)
+    return rejected("finished", player.beatCount);
   if (player.relay?.status === "handoff") {
     if (
       player.relay.handoffEndsAt === null ||

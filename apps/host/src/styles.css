@@ -1590,6 +1590,37 @@ button {
   animation-name: beat-pop-accent;
   animation-duration: 640ms;
 }
+.track.is-finished .track-progress {
+  height: 4px;
+  background: var(--moss) !important;
+}
+.track.is-finished .racer {
+  filter: drop-shadow(0 0 10px rgb(246 216 107 / 78%));
+}
+.track.is-finished .racer-beat {
+  animation: finish-heart-pop 720ms cubic-bezier(0.175, 0.885, 0.32, 1.275) both;
+}
+.track.is-finished .racer .heart-solid {
+  stroke: #f6d86b;
+  stroke-width: 4;
+}
+.racer-finish-check {
+  position: absolute;
+  right: -2px;
+  top: -4px;
+  width: 20px;
+  height: 20px;
+  display: grid;
+  place-items: center;
+  border: 2px solid #fff;
+  border-radius: 50%;
+  background: #f6d86b;
+  color: var(--olive);
+  font-size: 12px;
+  font-style: normal;
+  font-weight: 900;
+  animation: finish-check-arrive 360ms var(--ease-out) 180ms both;
+}
 .finish-line {
   position: absolute;
   right: -18px;
@@ -1633,6 +1664,14 @@ button {
   border-radius: inherit;
   background: var(--ink);
   transition: width 220ms var(--ease-out);
+}
+.beat-score .track-finish-place {
+  display: block;
+  color: var(--moss-deep);
+  font-size: 24px;
+  letter-spacing: -0.05em;
+  line-height: 1;
+  animation: finish-place-arrive 420ms var(--ease-out) both;
 }
 .stadium-race {
   --rank-row: clamp(30px, 4.4vh, 46px);
@@ -1682,12 +1721,27 @@ button {
   font-weight: 800;
   font-variant-numeric: tabular-nums;
 }
+.rank-board-copy {
+  min-width: 0;
+  display: grid;
+  gap: 1px;
+}
 .rank-board strong {
   min-width: 0;
   overflow: hidden;
   color: var(--ink);
   font-size: clamp(12px, 0.92vw, 16px);
   font-weight: 700;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.rank-board-lap {
+  overflow: hidden;
+  color: color-mix(in srgb, var(--team-color) 72%, var(--ink));
+  font-size: clamp(9px, 0.66vw, 11px);
+  font-weight: 700;
+  letter-spacing: -0.02em;
+  line-height: 1.1;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
@@ -1792,6 +1846,40 @@ button {
   animation-name: stadium-beat-pop-accent;
   animation-duration: 640ms;
 }
+.stadium-racer.is-finished .stadium-racer-mark {
+  animation: stadium-finish-pop 720ms cubic-bezier(0.175, 0.885, 0.32, 1.275)
+    both;
+}
+.stadium-racer.is-finished .stadium-racer-heart {
+  stroke: #fff8cf;
+  filter: drop-shadow(0 0 12px rgb(246 216 107 / 88%));
+}
+.stadium-finish-halo {
+  fill: rgb(255 248 203 / 36%);
+  stroke: #f6d86b;
+  stroke-width: 5;
+  transform-box: fill-box;
+  transform-origin: center;
+  animation: stadium-finish-halo 720ms var(--ease-out) both;
+}
+.stadium-finish-badge,
+.stadium-finish-checkmark {
+  transform-box: fill-box;
+  transform-origin: center;
+  animation: stadium-finish-badge 360ms var(--ease-out) 180ms both;
+}
+.stadium-finish-badge {
+  fill: #f6d86b;
+  stroke: #fff;
+  stroke-width: 3;
+}
+.stadium-finish-checkmark {
+  fill: none;
+  stroke: var(--olive);
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  stroke-width: 4;
+}
 .stadium-racer.is-handoff .stadium-racer-mark {
   animation: stadium-handoff-pulse 900ms ease-in-out infinite alternate;
 }
@@ -1872,6 +1960,22 @@ button {
   color: #b6aa99;
 }
 .stadium-team-card.is-handoff .stadium-team-unit {
+  color: var(--team-color);
+}
+.stadium-team-card.is-finished {
+  border-color: color-mix(in srgb, var(--team-color) 48%, var(--line));
+  background: color-mix(in srgb, var(--team-color) 8%, #fff);
+  box-shadow: 0 8px 24px color-mix(in srgb, var(--team-color) 18%, transparent);
+}
+.stadium-team-place {
+  color: var(--team-color);
+  font-size: clamp(34px, 3.7vw, 64px);
+  font-weight: 850;
+  letter-spacing: -0.07em;
+  line-height: 1;
+  animation: finish-place-arrive 420ms var(--ease-out) both;
+}
+.stadium-team-card.is-finished .stadium-team-unit {
   color: var(--team-color);
 }
 .race-instruction {
@@ -2096,10 +2200,101 @@ button {
   }
 }
 
+@keyframes finish-heart-pop {
+  0% {
+    transform: scale(0.88);
+  }
+  38% {
+    transform: scale(1.38);
+  }
+  72% {
+    transform: scale(1.02);
+  }
+  100% {
+    transform: scale(1.1);
+  }
+}
+
+@keyframes finish-check-arrive {
+  from {
+    opacity: 0;
+    transform: translateY(5px) scale(0.4);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+
+@keyframes finish-place-arrive {
+  from {
+    opacity: 0;
+    transform: translateY(8px) scale(0.86);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+
+@keyframes race-finish-arrive {
+  from {
+    opacity: 0;
+    transform: translateY(22px) scale(0.9);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+
+@keyframes race-finish-line {
+  from {
+    opacity: 0;
+    transform: scaleX(0.15);
+  }
+  to {
+    opacity: 1;
+    transform: scaleX(1);
+  }
+}
+
 .stage-overlay {
   /* 이 화면의 목적은 트랙을 보여 주는 것이라 베일을 거의 걷습니다. */
   background: color-mix(in srgb, var(--field) 22%, transparent);
   backdrop-filter: none;
+}
+.stage-overlay.race-finish-overlay {
+  background: color-mix(in srgb, var(--field) 66%, transparent);
+  backdrop-filter: blur(2px);
+}
+.race-finish-message {
+  display: grid;
+  place-items: center;
+  color: var(--track-ink);
+  animation: race-finish-arrive 620ms cubic-bezier(0.05, 0.7, 0.1, 1) both;
+}
+.race-finish-message span {
+  margin-bottom: 4px;
+  font-size: clamp(12px, 1vw, 18px);
+  font-weight: 850;
+  letter-spacing: 0.2em;
+}
+.race-finish-message strong {
+  font-size: clamp(64px, min(10vw, 17vh), 156px);
+  font-weight: 850;
+  letter-spacing: -0.065em;
+  line-height: 1;
+  text-shadow: 0 8px 32px color-mix(in srgb, var(--field) 82%, transparent);
+}
+.race-finish-message i {
+  width: min(240px, 36vw);
+  height: 6px;
+  margin-top: clamp(14px, 2.5vh, 28px);
+  border-radius: 999px;
+  background: var(--moss);
+  transform-origin: center;
+  animation: race-finish-line 520ms var(--ease-out) 220ms both;
 }
 .stage-start {
   min-height: 68px;
@@ -2169,6 +2364,47 @@ button {
   }
   100% {
     transform: scale(1);
+  }
+}
+
+@keyframes stadium-finish-pop {
+  0% {
+    transform: scale(0.86);
+  }
+  36% {
+    transform: scale(1.42);
+  }
+  72% {
+    transform: scale(1.02);
+  }
+  100% {
+    transform: scale(1.1);
+  }
+}
+
+@keyframes stadium-finish-halo {
+  0% {
+    opacity: 0;
+    transform: scale(0.35);
+  }
+  46% {
+    opacity: 1;
+    transform: scale(1.18);
+  }
+  100% {
+    opacity: 1;
+    transform: scale(1);
+  }
+}
+
+@keyframes stadium-finish-badge {
+  from {
+    opacity: 0;
+    transform: scale(0.35) rotate(-12deg);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1) rotate(0);
   }
 }
 
