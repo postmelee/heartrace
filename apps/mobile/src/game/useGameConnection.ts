@@ -51,6 +51,7 @@ export function useGameConnection() {
   const [room, setRoom] = useState<RoomSnapshot | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
   const [lastOwnBeat, setLastOwnBeat] = useState<AcceptedBeat | null>(null);
+  const [lastBeatSequence, setLastBeatSequence] = useState(-1);
   const [beatDelivery, setBeatDelivery] = useState<BeatDeliveryState>(
     INITIAL_BEAT_DELIVERY,
   );
@@ -60,6 +61,7 @@ export function useGameConnection() {
     setSession(null);
     setRoom(null);
     setLastOwnBeat(null);
+    setLastBeatSequence(-1);
     setNotice(nextNotice);
     void AsyncStorage.removeItem(STORAGE_KEY);
   }, []);
@@ -95,11 +97,13 @@ export function useGameConnection() {
           sessionRef.current = null;
           setSession(null);
           setRoom(null);
+          setLastBeatSequence(-1);
           return;
         }
         sessionRef.current = stored;
         setSession(stored);
         setRoom(result.data.room);
+        setLastBeatSequence(result.data.lastBeatSequence);
       } catch {
         if (!disposed) setRestoring(false);
       }
@@ -149,6 +153,7 @@ export function useGameConnection() {
     sessionRef.current = next;
     setSession(next);
     setRoom(result.data.room);
+    setLastBeatSequence(result.data.lastBeatSequence);
     void AsyncStorage.setItem(STORAGE_KEY, JSON.stringify(next));
   }, []);
 
@@ -213,6 +218,7 @@ export function useGameConnection() {
     room,
     notice,
     lastOwnBeat,
+    lastBeatSequence,
     beatDelivery,
     join,
     sendMeasurement,

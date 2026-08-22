@@ -8,9 +8,11 @@ import {
   acceptBeat,
   addPlayer,
   beginRace,
+  completeExpiredRelayHandoffs,
   endRace,
   completeRelayHandoff,
   createRoomState,
+  finishRaceIfComplete,
   removePlayer,
   resetRoom,
   resumePlayer,
@@ -167,6 +169,7 @@ io.on("connection", (socket) => {
           room: toSnapshot(room),
           playerId: resumed.id,
           playerToken: resumed.token,
+          lastBeatSequence: resumed.lastSequence,
         });
       }
 
@@ -185,6 +188,7 @@ io.on("connection", (socket) => {
         room: toSnapshot(room),
         playerId: player.id,
         playerToken: player.token,
+        lastBeatSequence: player.lastSequence,
       });
     } catch (error) {
       return fail(ack, error);
@@ -209,7 +213,12 @@ io.on("connection", (socket) => {
     // 경기 중이어도 즉시 제거해 앱과 호스트 양쪽에 이전 참가자가 남지 않게 합니다.
     removePlayer(context.room, context.player.id);
     detachPlayerSocket(socket, context.room.code);
+    const raceFinished = finishRaceIfComplete(context.room, Date.now());
+    if (raceFinished) clearRoomRelayHandoffs(context.room.code);
     emitSnapshot(context.room);
+    if (raceFinished) {
+      io.to(context.room.code).emit("race:finished", toSnapshot(context.room));
+    }
     return ack({ ok: true, data: { left: true } });
   });
 
@@ -330,6 +339,7 @@ io.on("connection", (socket) => {
       scheduleRelayHandoff(context.room, context.player.id);
     }
     if (result.raceFinished) {
+      clearRoomRelayHandoffs(context.room.code);
       io.to(context.room.code).emit("race:finished", toSnapshot(context.room));
     }
   });
@@ -353,7 +363,12 @@ io.on("connection", (socket) => {
       }
     }
     if (socket.data.role === "viewer") return;
+    const raceFinished = finishRaceIfComplete(room, Date.now());
+    if (raceFinished) clearRoomRelayHandoffs(room.code);
     emitSnapshot(room);
+    if (raceFinished) {
+      io.to(room.code).emit("race:finished", toSnapshot(room));
+    }
   });
 });
 
@@ -395,6 +410,7 @@ function getHostRoom(code: string, token: string): RoomState {
 }
 
 function emitSnapshot(room: RoomState): void {
+  completeExpiredRelayHandoffs(room, Date.now());
   io.to(room.code).emit("room:snapshot", toSnapshot(room));
 }
 
@@ -484,6 +500,7 @@ function scheduleDemoBeat(
       if (result.handoffStarted) scheduleRelayHandoff(room, playerId);
       if (result.raceFinished) {
         clearDemoSimulation(room.code);
+        clearRoomRelayHandoffs(room.code);
         io.to(room.code).emit("race:finished", toSnapshot(room));
         return;
       }
@@ -529,15 +546,37 @@ function clearCountdown(code: string): void {
 function scheduleRelayHandoff(room: RoomState, playerId: string): void {
   const player = room.players.get(playerId);
   const handoffEndsAt = player?.relay?.handoffEndsAt;
-  if (!player || handoffEndsAt === null || handoffEndsAt === undefined) return;
+  if (
+    !player ||
+    player.relay?.status !== "handoff" ||
+    handoffEndsAt === null ||
+    handoffEndsAt === undefined
+  ) {
+    return;
+  }
   clearRelayHandoff(room.code, playerId);
   const key = relayHandoffKey(room.code, playerId);
   const timer = setTimeout(
     () => {
       relayHandoffTimers.delete(key);
-      if (completeRelayHandoff(room, playerId, Date.now())) emitSnapshot(room);
+      if (room.phase !== "racing") return;
+      if (completeRelayHandoff(room, playerId, Date.now())) {
+        emitSnapshot(room);
+        return;
+      }
+
+      // 시스템 시계 보정 등으로 경계보다 일찍 깨어난 경우 타이머를 잃지 않고
+      // 현재 서버 종료 시각을 기준으로 다시 예약합니다.
+      const currentRelay = room.players.get(playerId)?.relay;
+      if (
+        room.phase === "racing" &&
+        currentRelay?.status === "handoff" &&
+        currentRelay.handoffEndsAt !== null
+      ) {
+        scheduleRelayHandoff(room, playerId);
+      }
     },
-    Math.max(0, handoffEndsAt - Date.now()),
+    Math.max(1, handoffEndsAt - Date.now()),
   );
   timer.unref();
   relayHandoffTimers.set(key, timer);

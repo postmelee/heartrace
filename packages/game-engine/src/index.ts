@@ -380,18 +380,7 @@ export function acceptBeat(
       : null,
   };
 
-  const connectedPlayers = [...room.players.values()].filter(
-    (candidate) => candidate.connected,
-  );
-  const raceFinished =
-    connectedPlayers.length > 0 &&
-    connectedPlayers.every((candidate) => candidate.finishPlace !== null);
-
-  if (raceFinished) {
-    room.phase = "finished";
-    room.finishedAt = acceptedAt;
-    room.finishReason = "completed";
-  }
+  const raceFinished = finishRaceIfComplete(room, acceptedAt);
 
   return {
     accepted: true,
@@ -437,6 +426,46 @@ export function completeRelayHandoff(
   player.signalQuality = 0;
   player.lastAcceptedDetectedAt = null;
   player.bridgedSinceObserved = 0;
+  return true;
+}
+
+/**
+ * 단발성 타이머나 네트워크 갱신이 누락돼도 종료 시각이 지난 바톤 상태를
+ * 서버의 다음 활동에서 복구합니다.
+ */
+export function completeExpiredRelayHandoffs(
+  room: RoomState,
+  now: number,
+): number {
+  if (room.phase !== "racing") return 0;
+  let completed = 0;
+  for (const player of room.players.values()) {
+    if (
+      player.relay?.status !== "handoff" ||
+      player.relay.handoffEndsAt === null ||
+      now < player.relay.handoffEndsAt
+    ) {
+      continue;
+    }
+    if (completeRelayHandoff(room, player.id, now)) completed += 1;
+  }
+  return completed;
+}
+
+/** 연결 상태가 바뀐 경우에도 기존 자동 종료 규칙을 동일하게 재평가합니다. */
+export function finishRaceIfComplete(room: RoomState, now: number): boolean {
+  if (room.phase !== "racing") return false;
+  const connectedPlayers = [...room.players.values()].filter(
+    (candidate) => candidate.connected,
+  );
+  const raceFinished =
+    connectedPlayers.length > 0 &&
+    connectedPlayers.every((candidate) => candidate.finishPlace !== null);
+  if (!raceFinished) return false;
+
+  room.phase = "finished";
+  room.finishedAt = now;
+  room.finishReason = "completed";
   return true;
 }
 

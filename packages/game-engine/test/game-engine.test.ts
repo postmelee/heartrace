@@ -4,9 +4,11 @@ import {
   acceptBeat,
   addPlayer,
   beginRace,
+  completeExpiredRelayHandoffs,
   completeRelayHandoff,
   createRoomState,
   endRace,
+  finishRaceIfComplete,
   removePlayer,
   resetRoom,
   startCountdown,
@@ -325,6 +327,52 @@ describe("심박 경주 규칙", () => {
     expect(nextRunnerBeat.event?.relay?.runnerIndex).toBe(1);
     expect(nextRunnerBeat.beatCount).toBe(11);
     expect(nextRunnerBeat.event?.relay?.legDistanceRatio).toBe(0.1);
+  });
+
+  it("바톤 타이머를 놓쳐도 만료 상태를 다음 서버 활동에서 복구한다", () => {
+    const { room, firstTeam } = setupRelayRace(10);
+    for (let sequence = 1; sequence <= 10; sequence += 1) {
+      acceptBeat(room, firstTeam.id, beat(sequence), 5_000 + sequence * 800);
+    }
+
+    expect(completeExpiredRelayHandoffs(room, 17_999)).toBe(0);
+    expect(completeExpiredRelayHandoffs(room, 18_000)).toBe(1);
+    expect(completeExpiredRelayHandoffs(room, 18_001)).toBe(0);
+    expect(firstTeam.relay).toMatchObject({
+      activeRunnerIndex: 1,
+      status: "running",
+      handoffEndsAt: null,
+    });
+  });
+
+  it("만료된 바톤 상태에서는 다음 박동이 전환과 진행을 함께 복구한다", () => {
+    const { room, firstTeam } = setupRelayRace(10);
+    for (let sequence = 1; sequence <= 10; sequence += 1) {
+      acceptBeat(room, firstTeam.id, beat(sequence), 5_000 + sequence * 800);
+    }
+
+    const recovered = acceptBeat(
+      room,
+      firstTeam.id,
+      beat(11, { detectedAt: 18_600, bpm: 91 }),
+      18_600,
+    );
+
+    expect(recovered.accepted).toBe(true);
+    expect(recovered.beatCount).toBe(11);
+    expect(recovered.event?.relay?.runnerIndex).toBe(1);
+    expect(firstTeam.relay?.status).toBe("running");
+  });
+
+  it("미완주 참가자의 연결이 끊기면 남은 참가자 기준으로 종료를 재평가한다", () => {
+    const { room, firstTeam, secondTeam } = setupRelayRace(10);
+    firstTeam.finishPlace = 1;
+    secondTeam.connected = false;
+
+    expect(finishRaceIfComplete(room, 20_000)).toBe(true);
+    expect(room.phase).toBe("finished");
+    expect(room.finishedAt).toBe(20_000);
+    expect(room.finishReason).toBe("completed");
   });
 
   it("마지막 주자는 바톤 전환 없이 팀의 완주 순위를 확정한다", () => {

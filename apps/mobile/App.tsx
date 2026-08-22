@@ -220,10 +220,8 @@ function HeartRaceApp() {
   const onBeat = useCallback(
     (beat: PpgBeat) => {
       if (roomRef.current?.phase !== "racing") return;
-      const currentPlayer = roomRef.current.players.find(
-        (player) => player.id === game.session?.playerId,
-      );
-      if (currentPlayer?.relay?.status === "handoff") return;
+      // 바톤 시간의 최종 판정은 서버가 담당합니다. 전환 중 박동도 서버로
+      // 보내야 단발성 타이머나 스냅샷이 누락됐을 때 만료 상태를 복구할 수 있습니다.
       sequenceRef.current += 1;
       const event: BeatEvent = {
         id: `${Date.now().toString(36)}-${sequenceRef.current.toString(36)}-${Math.random().toString(36).slice(2, 8)}`,
@@ -237,8 +235,12 @@ function HeartRaceApp() {
       };
       game.sendBeat(event);
     },
-    [game.sendBeat, game.session?.playerId],
+    [game.sendBeat],
   );
+
+  useEffect(() => {
+    sequenceRef.current = Math.max(sequenceRef.current, game.lastBeatSequence);
+  }, [game.lastBeatSequence, game.session?.playerId]);
 
   useEffect(() => {
     if (game.room?.phase !== "lobby") return;

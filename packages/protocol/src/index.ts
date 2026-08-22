@@ -187,6 +187,8 @@ export interface PlayerJoinResponse {
   room: RoomSnapshot;
   playerId: string;
   playerToken: string;
+  /** 재접속한 앱이 다음 박동 순번을 이어가기 위한 서버의 마지막 승인 순번 */
+  lastBeatSequence: number;
 }
 
 export type PlayerRemovalReason = "kicked" | "inactive";
