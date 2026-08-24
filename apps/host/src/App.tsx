@@ -17,6 +17,7 @@ import type {
   RoomSnapshot,
   ServerToClientEvents,
 } from "@heartrace/protocol";
+import PlayChallenge from "./PlayChallenge";
 
 const SOCKET_URL = import.meta.env.VITE_SOCKET_URL ?? "http://localhost:3001";
 const PUBLIC_URL = import.meta.env.VITE_PUBLIC_URL ?? window.location.origin;
@@ -39,6 +40,7 @@ export default function App() {
   if (path === "/watch") return <SpectatorApp />;
   if (path === "/privacy") return <PrivacyPage />;
   if (path === "/support") return <SupportPage />;
+  if (path === "/play") return <PlayChallenge />;
   if (path === "/demo") return <HostApp demo />;
   return <HostApp />;
 }
@@ -414,7 +416,7 @@ function JoinLanding() {
     <main className="public-page join-landing page-enter">
       <BrandHomeLink className="public-wordmark" />
       <div className="public-page-copy">
-        <p className="eyebrow">HEART RACE</p>
+        <p className="eyebrow">한 박동, 한 걸음</p>
         <h1>
           심장으로 달릴
           <br /> 준비가 됐나요?
@@ -470,7 +472,7 @@ function PrivacyPage() {
   return (
     <PublicDocument title="개인정보 처리방침">
       <p>
-        심장 달리기는 참여형 전시의 실시간 경주 진행을 위해 방 코드, 참가자가
+        심장달리기는 참여형 전시의 실시간 경주 진행을 위해 방 코드, 참가자가
         입력한 닉네임, 측정 BPM, 신호 품질 및 박동 이벤트를 서버로 전송합니다.
       </p>
       <h2>카메라 데이터</h2>
@@ -534,7 +536,7 @@ function PublicDocument({
     <main className="public-page public-document page-enter">
       <BrandHomeLink className="public-wordmark" />
       <article>
-        <p className="eyebrow">HEART RACE</p>
+        <p className="eyebrow">심장달리기</p>
         <h1>{title}</h1>
         {children}
       </article>
@@ -597,20 +599,21 @@ function Home({
       <header className="home-header">
         <BrandHomeLink />
         <div className="home-kicker">
-          {demo && (
+          {demo ? (
             <>
               <LiveDot live={connected} />
-              휴대폰 없는 리허설
+              자동 경기 데모
             </>
+          ) : (
+            <>실시간 심장 박동 레이스</>
           )}
-          <PartnerLockup />
         </div>
       </header>
       <div className="home-copy">
-        <p className="display-category">{demo ? "REHEARSAL" : "PHYSICAL"}</p>
+        <p className="display-category">{demo ? "AUTO RACE" : "LIVE GAME"}</p>
         <p className="session-line">
-          <sup>3</sup> 신체 운동 · <strong>0km 이어달리기</strong>
-          {demo && " · 모의 경기"}
+          <strong>심장달리기</strong>
+          {demo && " · 가상 박동 모드"}
         </p>
         <h1>
           {demo ? (
@@ -755,9 +758,14 @@ function Home({
           <ArrowIcon />
         </button>
         {!demo && (
-          <a className="demo-entry" href="/demo">
-            휴대폰 없이 테스트하기
-          </a>
+          <>
+            <a className="demo-entry is-primary" href="/play">
+              브라우저로 바로 플레이
+            </a>
+            <a className="demo-entry" href="/demo">
+              자동 경기 데모
+            </a>
+          </>
         )}
         {error && (
           <p className="error-message" role="alert">
@@ -768,7 +776,7 @@ function Home({
       <p className="edition">
         {demo
           ? "가상 박동은 의료 측정값이 아닙니다."
-          : "《ㅊㅊㅊ 운동회》 2026.08.22 · 누부크"}
+          : "박동 한 번이 한 걸음이 되는 실시간 경주"}
       </p>
     </main>
   );
@@ -1054,7 +1062,7 @@ function Lobby({
           <p className="join-help">
             {room.demo
               ? "경기 시작을 누르면 서버가 팀마다 서로 다른 가상 심박을 발생시킵니다."
-              : `심장 달리기 앱을 열고 ${isRelay ? "팀 이름" : "닉네임"}과 코드를 입력하세요.`}
+              : `심장달리기 앱을 열고 ${isRelay ? "팀 이름" : "닉네임"}과 코드를 입력하세요.`}
           </p>
         </div>
         {room.demo ? (
@@ -2149,25 +2157,14 @@ function Finish({
         </button>
       )}
       <div className="finish-brand">
-        <CccMark />
-        <PartnerLockup />
+        <HeartBrandMark />
+        <strong>심장달리기</strong>
       </div>
     </section>
   );
 }
 
-/** 포스터의 `nuvook | LIVINGLIKEAGIRAFFE` 락업 */
-function PartnerLockup() {
-  return (
-    <p className="partner-lockup" aria-label="누부크 × 리빙라이크어지라프">
-      <span className="partner-nuvook">nuvook</span>
-      <span className="partner-divider" aria-hidden="true" />
-      <span className="partner-llg">LIVINGLIKEAGIRAFFE</span>
-    </p>
-  );
-}
-
-/** 모든 웹 화면에서 홈으로 이어지는 공식 브랜드 락업입니다. */
+/** 모든 웹 화면에서 홈으로 이어지는 심장달리기 워드마크입니다. */
 function BrandHomeLink({
   className = "",
   onNavigate,
@@ -2190,17 +2187,16 @@ function BrandHomeLink({
     <a
       className={`brand-home-link ${tone === "light" ? "is-light" : ""} ${className}`}
       href="/"
-      aria-label="0km 이어달리기 홈으로"
+      aria-label="심장달리기 홈으로"
       onClick={navigateHome}
     >
-      <CccMark tone={tone} />
-      <span>0km 이어달리기</span>
+      <HeartBrandMark tone={tone} />
+      <span>심장달리기</span>
     </a>
   );
 }
 
-/** 첨부된 공식 로고의 배경을 제거한 어두운색·밝은색 버전입니다. */
-function CccMark({
+function HeartBrandMark({
   className = "",
   tone = "dark",
 }: {
@@ -2208,11 +2204,14 @@ function CccMark({
   tone?: "dark" | "light";
 }) {
   return (
-    <span
-      className={`ccc-mark ${tone === "light" ? "is-light" : ""} ${className}`}
-      role="img"
-      aria-label="ㅊㅊㅊ 운동회"
-    />
+    <svg
+      className={`heart-brand-mark ${tone === "light" ? "is-light" : ""} ${className}`}
+      viewBox="0 0 64 58"
+      aria-hidden="true"
+    >
+      <path d="M46.6 2C40.6 2 35.2 5.2 32 10 28.8 5.2 23.4 2 17.4 2 7.8 2 0 9.8 0 19.4 0 35.6 32 57 32 57s32-21.4 32-37.6C64 9.8 56.2 2 46.6 2Z" />
+      <path className="heart-brand-wave" d="M8 30h14l5-10 9 22 6-12h14" />
+    </svg>
   );
 }
 

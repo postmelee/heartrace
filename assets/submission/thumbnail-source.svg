@@ -1,0 +1,13 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1920" height="1080" viewBox="0 0 1920 1080">
+  <defs>
+    <linearGradient id="titleFade" x1="0" x2="1">
+      <stop offset="0" stop-color="#fff9f6" stop-opacity="0.96"/>
+      <stop offset="0.58" stop-color="#fff9f6" stop-opacity="0.7"/>
+      <stop offset="1" stop-color="#fff9f6" stop-opacity="0"/>
+    </linearGradient>
+  </defs>
+  <image href="thumbnail-art.png" x="0" y="0" width="1920" height="1080" preserveAspectRatio="xMidYMid slice"/>
+  <rect x="0" y="0" width="1060" height="430" fill="url(#titleFade)"/>
+  <text x="116" y="186" fill="#332028" font-family="Pretendard, sans-serif" font-size="116" font-weight="800" letter-spacing="-7">심장달리기</text>
+  <text x="124" y="258" fill="#a82f49" font-family="Pretendard, sans-serif" font-size="38" font-weight="700" letter-spacing="-1">한 박동, 한 걸음.</text>
+</svg>

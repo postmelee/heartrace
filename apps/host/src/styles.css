@@ -10,32 +10,28 @@
   background: var(--paper);
   font-synthesis: none;
   text-rendering: optimizeLegibility;
-  /*
-   * 《ㅊㅊㅊ 운동회》 (@livinglikeagiraffe_ × @nuvook_) 브랜드 토큰.
-   * 포스터에서 추출: 잔디 모스 그린 #9b9443, 딥 올리브 #3e3b1b, 크림 #fbfbee.
-   */
-  --moss: #9b9443;
-  --moss-deep: #7d7734;
-  --olive: #3e3b1b;
-  --olive-soft: #565232;
-  --cream: #fbfbee;
-  --brand-brown: #3e1f0f;
-  --brand-ivory: #fbfaec;
+  /* 심장과 달리기에서 가져온 독립 팔레트입니다. */
+  --moss: #d94f67;
+  --moss-deep: #a82f49;
+  --olive: #332028;
+  --olive-soft: #5d4650;
+  --cream: #fff0ea;
+  --brand-brown: #5d1f30;
+  --brand-ivory: #fff9f6;
 
-  --ink: #3e3b1b;
-  --muted: #6f6a4a;
-  --faint: #efeddc;
-  --line: #d9d5bd;
-  --paper: #f6f4e6;
-  --green: #7d7734;
-  --green-deep: #5c5726;
-  --green-soft: #e7e6cf;
+  --ink: #332028;
+  --muted: #76616a;
+  --faint: #f5e9e5;
+  --line: #dfcec9;
+  --paper: #fff9f6;
+  --green: #b33a53;
+  --green-deep: #84243a;
+  --green-soft: #f6dfe3;
 
-  /* 트랙 그래픽은 별도로 지정받은 팔레트를 유지합니다. */
-  --field: #e6dad1;
-  --track: #bf673c;
-  --turf: #dceca1;
-  --track-ink: #3b1b10;
+  --field: #f2e6e1;
+  --track: #ce6b59;
+  --turf: #dcebdc;
+  --track-ink: #4a231d;
   --ease-out: cubic-bezier(0.2, 0, 0, 1);
 }
 
@@ -167,6 +163,16 @@ button {
   color: var(--ink);
   outline: none;
   transform: translateY(-1px);
+}
+.demo-entry.is-primary {
+  border-color: var(--ink);
+  color: var(--brand-ivory);
+  background: var(--ink);
+}
+.demo-entry.is-primary:hover,
+.demo-entry.is-primary:focus-visible {
+  color: #fff;
+  background: var(--green-deep);
 }
 .race-setup {
   display: flex;
@@ -670,8 +676,7 @@ button {
   color: var(--ink);
   display: flex;
   align-items: center;
-  /* 기존 ㅊㅊㅊ–텍스트 시작 위치는 유지하고, 추가된 ⓒ가 기존 여백 안에 놓입니다. */
-  gap: 2px;
+  gap: 9px;
   font-size: 18px;
   font-weight: 780;
   text-decoration: none;
@@ -691,45 +696,23 @@ button {
 .wordmark {
   flex: 0 0 auto;
 }
-/* 첨부된 공식 로고 두 버전의 투명 알파를 마스크로 사용해 텍스트와 한 색으로 맞춥니다. */
-.ccc-mark {
-  /* ⓒ까지 24px 높이에 맞춰 ㅊㅊㅊ 본체가 기존 62×24px 마크와 같은 크기로 보입니다. */
-  width: 70px;
-  height: 24px;
+.heart-brand-mark {
+  width: 27px;
+  height: 25px;
   flex: 0 0 auto;
-  background: currentColor;
-  transform: translateY(1px);
-  mask: url("/brand/ccc-logo-dark.png") no-repeat center / contain;
-  -webkit-mask: url("/brand/ccc-logo-dark.png") no-repeat center / contain;
+  overflow: visible;
+  fill: currentColor;
 }
-.ccc-mark.is-light {
-  mask-image: url("/brand/ccc-logo-light.png");
-  -webkit-mask-image: url("/brand/ccc-logo-light.png");
+.heart-brand-wave {
+  fill: none;
+  stroke: var(--paper);
+  stroke-width: 5;
+  stroke-linecap: round;
+  stroke-linejoin: round;
 }
-.partner-lockup {
-  margin: 0;
-  display: inline-flex;
-  align-items: center;
-  gap: 9px;
-  color: var(--muted);
+.heart-brand-mark.is-light .heart-brand-wave {
+  stroke: var(--ink);
 }
-.partner-nuvook {
-  font-size: 13px;
-  font-weight: 700;
-  letter-spacing: -0.02em;
-}
-.partner-divider {
-  width: 1px;
-  height: 11px;
-  background: currentColor;
-  opacity: 0.5;
-}
-.partner-llg {
-  font-size: 11px;
-  font-weight: 650;
-  letter-spacing: 0.05em;
-}
-/* 포스터의 큰 영문 카테고리: 가는 굵기, 크게, 자간 좁게 */
 .display-category {
   margin: 0 0 6px;
   color: var(--moss-deep);
@@ -738,7 +721,6 @@ button {
   letter-spacing: -0.035em;
   line-height: 0.95;
 }
-/* 어깨번호 + 한글 세션명 */
 .session-line {
   margin: 0 0 clamp(10px, 2vh, 22px);
   color: var(--ink);
@@ -753,7 +735,6 @@ button {
 .session-line strong {
   font-weight: 750;
 }
-/* 포스터의 크림 알약 칩 */
 .brand-chip {
   display: inline-flex;
   align-items: center;
@@ -771,9 +752,13 @@ button {
   gap: 14px;
   color: var(--muted);
 }
-.finish-brand .ccc-mark {
-  width: 52px;
-  height: 18px;
+.finish-brand .heart-brand-mark {
+  width: 30px;
+  height: 27px;
+}
+.finish-brand strong {
+  color: var(--ink);
+  font-size: 17px;
 }
 .top-bar-actions {
   display: flex;
@@ -2463,9 +2448,9 @@ button {
     gap: 7px;
     font-size: 13px;
   }
-  .top-bar .ccc-mark {
-    width: 58px;
-    height: 20px;
+  .top-bar .heart-brand-mark {
+    width: 23px;
+    height: 21px;
   }
   .watch-link-button {
     width: 38px;
@@ -2510,8 +2495,8 @@ button {
   .race-wordmark {
     font-size: 13px;
   }
-  .race-wordmark .ccc-mark {
-    width: 62px;
+  .race-wordmark .heart-brand-mark {
+    width: 24px;
     height: 22px;
   }
   .race-actions {

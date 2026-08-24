@@ -12,7 +12,6 @@ import {
   Animated,
   AppState,
   Easing,
-  Image,
   Keyboard,
   KeyboardAvoidingView,
   Linking,
@@ -104,12 +103,12 @@ export default function App() {
   return (
     <SafeAreaProvider>
       <StatusBar style="dark" />
-      <HeartRaceApp />
+        <HeartRunApp />
     </SafeAreaProvider>
   );
 }
 
-function HeartRaceApp() {
+function HeartRunApp() {
   const game = useGameConnection();
   const { width: viewportWidth, height: viewportHeight } =
     useWindowDimensions();
@@ -628,7 +627,7 @@ function JoinScreen({
         <SafeAreaView edges={["top", "bottom"]} style={styles.joinScreen}>
           <View style={styles.screenHeader}>
             <Pressable
-              accessibilityLabel="ㅊㅊㅊ 운동회 0km 이어달리기"
+              accessibilityLabel="심장달리기"
               accessibilityHint={
                 onOpenRacePreview
                   ? "길게 누르면 경기 화면 미리보기를 엽니다"
@@ -640,17 +639,15 @@ function JoinScreen({
               onLongPress={onOpenRacePreview}
               style={styles.wordmark}
             >
-              <Image
-                resizeMode="contain"
-                source={require("../host/public/brand/ccc-logo.png")}
-                style={styles.wordmarkLogo}
-              />
-              <Text style={styles.wordmarkTitle}>0km 이어달리기</Text>
+              <Text aria-hidden style={styles.wordmarkIcon}>
+                ♥
+              </Text>
+              <Text style={styles.wordmarkTitle}>심장달리기</Text>
             </Pressable>
             <ConnectionPill connected={connected} />
           </View>
           <View style={styles.joinCopy}>
-            <Text style={styles.eyebrow}>HEART RACE</Text>
+            <Text style={styles.eyebrow}>한 박동, 한 걸음</Text>
             <Text maxFontSizeMultiplier={1.1} style={styles.joinTitle}>
               심장으로{`\n`}달릴 준비가 됐나요?
             </Text>
@@ -2318,10 +2315,11 @@ const styles = StyleSheet.create({
     alignItems: "center",
     gap: 8,
   },
-  wordmarkLogo: {
-    width: 52,
-    height: 20,
-    tintColor: colors.ink,
+  wordmarkIcon: {
+    color: colors.moss,
+    fontFamily: fonts.bold,
+    fontSize: 25,
+    lineHeight: 27,
   },
   wordmarkTitle: {
     color: colors.ink,
