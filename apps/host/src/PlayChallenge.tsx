@@ -116,9 +116,10 @@ export default function PlayChallenge() {
         <section className="play-intro" aria-labelledby="play-title">
           <p className="play-kicker">한 박동, 한 걸음</p>
           <h1 id="play-title">
-            손끝으로 뛰고,
-            <br />
-            <span>심장으로 달리세요.</span>
+            <span className="play-title-line">손끝으로 뛰고,</span>
+            <span className="play-title-line play-title-accent">
+              심장으로 달리세요.
+            </span>
           </h1>
           <p className="play-description">
             탭하거나 스페이스바를 누를 때마다 당신의 심장이 한 걸음
