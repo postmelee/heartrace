@@ -15,7 +15,7 @@ services:
   - type: web
     name: heartrace-postmelee
     runtime: static
-    buildCommand: npm ci && npm run build -w @heartrace/host
+    buildCommand: npm ci && npm run build:render -w @heartrace/host
     staticPublishPath: ./apps/host/dist
     autoDeployTrigger: commit
     envVars:
@@ -25,10 +25,22 @@ services:
         value: https://heartrace-postmelee.onrender.com
       - key: VITE_IOS_INSTALL_URL
         value: https://testflight.apple.com/join/TJXqEQfy
+      - key: VITE_ANDROID_INSTALL_URL
+        value: https://heartrace-postmelee.onrender.com/downloads/simjangdalrigi-android.apk
+      - key: ANDROID_APK_SOURCE_URL
+        value: https://expo.dev/artifacts/eas/YJ9nuDQdGu4xJlNM8CEE616snL_iNU3HNnMQQEVSO08.apk
+      - key: ANDROID_APK_SHA256
+        value: c3eb3247f0563346105d2b4024caabb6b0597ba27c578b00b4ecaa98d4f805cc
     headers:
       - path: /.well-known/apple-app-site-association
         name: Content-Type
         value: application/json
+      - path: /downloads/*.apk
+        name: Content-Type
+        value: application/vnd.android.package-archive
+      - path: /downloads/*.apk
+        name: Content-Disposition
+        value: attachment; filename="simjangdalrigi-android.apk"
       - path: /*
         name: X-Content-Type-Options
         value: nosniff
