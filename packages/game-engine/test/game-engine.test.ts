@@ -12,6 +12,7 @@ import {
   removePlayer,
   resetRoom,
   startCountdown,
+  toSnapshot,
   updateMeasurement,
 } from "../src/index";
 
@@ -90,6 +91,21 @@ function beat(sequence: number, overrides: Partial<BeatEvent> = {}): BeatEvent {
 }
 
 describe("심박 경주 규칙", () => {
+  it("촬영용 모의 경기의 실제 참가자 슬롯을 스냅샷에 보존한다", () => {
+    const room = createRoomState({
+      code: "FILM",
+      hostToken: "host-token",
+      hostSocketId: "host-socket",
+      mode: "relay",
+      demo: true,
+      demoHumanSlot: true,
+      relay: { teamCount: 4, runnersPerTeam: 2, legBeats: 10 },
+    });
+
+    expect(room.demoHumanSlot).toBe(true);
+    expect(toSnapshot(room).demoHumanSlot).toBe(true);
+  });
+
   it("호스트가 경기 종료 시 현재 기록을 보존하고 수동 종료 사유를 남긴다", () => {
     const { room } = setupRace(10);
     acceptBeat(room, "player-1", beat(1), 5_800);
