@@ -96,6 +96,11 @@ io.on("connection", (socket) => {
           "모의 경기는 팀 이어달리기 모드에서만 만들 수 있습니다.",
         );
       }
+      if (request.demoHumanSlot && !request.demo) {
+        throw new Error(
+          "실제 참가자 슬롯은 모의 경기에서만 사용할 수 있습니다.",
+        );
+      }
       const code = createRoomCode();
       const hostToken = createToken();
       const room = createRoomState({
@@ -110,9 +115,12 @@ io.on("connection", (socket) => {
           ? {}
           : { trackMode: request.trackMode }),
         ...(request.demo === undefined ? {} : { demo: request.demo }),
+        ...(request.demoHumanSlot === undefined
+          ? {}
+          : { demoHumanSlot: request.demoHumanSlot }),
         ...(request.relay === undefined ? {} : { relay: request.relay }),
       });
-      if (room.demo) populateDemoRoom(room);
+      if (room.demo && !room.demoHumanSlot) populateDemoRoom(room);
       rooms.set(code, room);
       attachSocket(socket, code, "host");
       ok<HostCreateRoomResponse>(ack, { room: toSnapshot(room), hostToken });
@@ -145,7 +153,7 @@ io.on("connection", (socket) => {
     try {
       const room = rooms.get(normalizeCode(request.roomCode));
       if (!room) throw new Error("방 코드를 다시 확인해 주세요.");
-      if (room.demo) {
+      if (room.demo && !room.demoHumanSlot) {
         throw new Error("모의 경기에는 휴대폰 참가자가 입장할 수 없습니다.");
       }
 
@@ -182,6 +190,7 @@ io.on("connection", (socket) => {
           ? {}
           : { runnerNames: request.runnerNames }),
       });
+      if (room.demoHumanSlot) populateDemoRoom(room);
       attachSocket(socket, room.code, "player", player.id);
       emitSnapshot(room);
       return ok<PlayerJoinResponse>(ack, {
@@ -418,13 +427,17 @@ function populateDemoRoom(room: RoomState): void {
   const settings = room.relaySettings;
   if (!settings) throw new Error("모의 경기의 팀 설정을 확인해 주세요.");
 
-  for (let teamIndex = 0; teamIndex < settings.teamCount; teamIndex += 1) {
-    const playerId = `mock-${room.code}-${teamIndex + 1}`;
+  let mockIndex = [...room.players.values()].filter((player) =>
+    isDemoBot(room, player.id),
+  ).length;
+  while (room.players.size < settings.teamCount) {
+    mockIndex += 1;
+    const playerId = `mock-${room.code}-${mockIndex}`;
     addPlayer(room, {
       id: playerId,
       token: createToken(),
       socketId: `mock:${playerId}`,
-      nickname: `모의 ${teamIndex + 1}팀`,
+      nickname: `MOCK ${mockIndex}팀`,
       runnerNames: Array.from(
         { length: settings.runnersPerTeam },
         (_, runnerIndex) => `${runnerIndex + 1}번 주자`,
@@ -436,6 +449,7 @@ function populateDemoRoom(room: RoomState): void {
 
 function prepareDemoPlayers(room: RoomState): void {
   [...room.players.values()].forEach((player, teamIndex) => {
+    if (!isDemoBot(room, player.id)) return;
     updateMeasurement(player, {
       state: "ready",
       bpm: demoBpm(teamIndex, 0, 0),
@@ -447,6 +461,7 @@ function prepareDemoPlayers(room: RoomState): void {
 function startDemoSimulation(room: RoomState): void {
   clearDemoSimulation(room.code);
   [...room.players.values()].forEach((player, teamIndex) => {
+    if (!isDemoBot(room, player.id)) return;
     scheduleDemoBeat(room, player.id, teamIndex, 280 + teamIndex * 110);
   });
 }
@@ -468,6 +483,7 @@ function scheduleDemoBeat(
       !room.demo ||
       room.phase !== "racing" ||
       !player ||
+      !isDemoBot(room, player.id) ||
       player.finishPlace !== null
     ) {
       return;
@@ -535,6 +551,10 @@ function clearDemoSimulation(roomCode: string): void {
 
 function demoBeatKey(roomCode: string, playerId: string): string {
   return `${roomCode}:${playerId}`;
+}
+
+function isDemoBot(room: RoomState, playerId: string): boolean {
+  return playerId.startsWith(`mock-${room.code}-`);
 }
 
 function clearCountdown(code: string): void {

@@ -47,6 +47,7 @@ export interface RoomState {
   mode: RaceMode;
   trackMode: TrackMode;
   demo: boolean;
+  demoHumanSlot: boolean;
   relaySettings: RelayRoomSettings | null;
   finishBeats: number;
   hostToken: string;
@@ -76,6 +77,7 @@ export function createRoomState(input: {
   mode?: RaceMode;
   trackMode?: TrackMode;
   demo?: boolean;
+  demoHumanSlot?: boolean;
   relay?: {
     teamCount: number;
     runnersPerTeam: number;
@@ -99,6 +101,7 @@ export function createRoomState(input: {
     mode,
     trackMode: input.trackMode ?? "straight",
     demo: input.demo ?? false,
+    demoHumanSlot: input.demoHumanSlot ?? false,
     relaySettings,
     finishBeats,
     hostToken: input.hostToken,
@@ -510,6 +513,7 @@ export function toSnapshot(room: RoomState): RoomSnapshot {
     mode: room.mode,
     trackMode: room.trackMode,
     demo: room.demo,
+    demoHumanSlot: room.demoHumanSlot,
     relaySettings: room.relaySettings ? { ...room.relaySettings } : null,
     serverNow: Date.now(),
     finishBeats: room.finishBeats,

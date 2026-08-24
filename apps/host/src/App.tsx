@@ -214,6 +214,7 @@ function HostApp({ demo = false }: { demo?: boolean }) {
         onLeave={leaveRoom}
         watchUrl={watchUrl.toString()}
         demo={room.demo}
+        demoHumanSlot={room.demoHumanSlot}
         immersive={immersive}
         onToggleImmersive={() => setImmersive((current) => !current)}
         canLeave={
@@ -342,6 +343,7 @@ function SpectatorApp() {
         code={room.code}
         mode="spectator"
         demo={room.demo}
+        demoHumanSlot={room.demoHumanSlot}
         immersive={immersive}
         onToggleImmersive={() => setImmersive((current) => !current)}
       />
@@ -587,27 +589,29 @@ function Home({
   const [mode, setMode] = useState<"individual" | "relay">(
     demo ? "relay" : "individual",
   );
-  const [teamCount, setTeamCount] = useState(2);
-  const [runnersPerTeam, setRunnersPerTeam] = useState(3);
-  const [legBeats, setLegBeats] = useState<10 | 20 | 30 | 60>(20);
+  const [demoHumanSlot, setDemoHumanSlot] = useState(true);
+  const [teamCount, setTeamCount] = useState(demo ? 4 : 2);
+  const [runnersPerTeam, setRunnersPerTeam] = useState(demo ? 2 : 3);
+  const [legBeats, setLegBeats] = useState<10 | 20 | 30 | 60>(demo ? 10 : 20);
   const [handoffSecondsInput, setHandoffSecondsInput] = useState(
-    String(DEFAULT_HANDOFF_DURATION_MS / 1_000),
+    String(demo ? 3 : DEFAULT_HANDOFF_DURATION_MS / 1_000),
   );
   const [trackMode, setTrackMode] = useState<"straight" | "circular">(
-    "straight",
+    demo ? "circular" : "straight",
   );
   const handoffSeconds = Number(handoffSecondsInput);
   const handoffSecondsValid =
     Number.isInteger(handoffSeconds) &&
     handoffSeconds >= MIN_HANDOFF_DURATION_MS / 1_000 &&
     handoffSeconds <= MAX_HANDOFF_DURATION_MS / 1_000;
+  const isHybridDemo = demo && demoHumanSlot;
   const createRequest: HostCreateRoomRequest =
     mode === "relay"
       ? {
           finishBeats: legBeats,
           mode,
           trackMode,
-          demo,
+          ...(demo ? { demo: true, demoHumanSlot } : {}),
           relay: {
             teamCount,
             runnersPerTeam,
@@ -618,14 +622,16 @@ function Home({
       : { finishBeats: 60, mode };
 
   return (
-    <main className={`home page-enter ${demo ? "is-demo" : ""}`}>
+    <main
+      className={`home page-enter ${demo ? "is-demo" : ""} ${isHybridDemo ? "is-hybrid-demo" : ""}`}
+    >
       <header className="home-header">
         <BrandHomeLink />
         <div className="home-kicker">
           {demo ? (
             <>
               <LiveDot live={connected} />
-              자동 경기 데모
+              {isHybridDemo ? "촬영용 LIVE + MOCK" : "자동 경기 데모"}
             </>
           ) : (
             <>실시간 심장 박동 레이스</>
@@ -633,13 +639,21 @@ function Home({
         </div>
       </header>
       <div className="home-copy">
-        <p className="display-category">{demo ? "AUTO RACE" : "LIVE GAME"}</p>
+        <p className="display-category">
+          {isHybridDemo ? "RECORDING MODE" : demo ? "AUTO RACE" : "LIVE GAME"}
+        </p>
         <p className="session-line">
           <strong>심장달리기</strong>
-          {demo && " · 가상 박동 모드"}
+          {demo && (isHybridDemo ? " · 직접 참여 + MOCK" : " · 가상 박동 모드")}
         </p>
         <h1>
-          {demo ? (
+          {isHybridDemo ? (
+            <>
+              나는 직접 뛰고,
+              <br />
+              나머지는 봇이 달립니다.
+            </>
+          ) : demo ? (
             <>
               가상의 심장으로,
               <br />팀 경기를 리허설합니다.
@@ -653,7 +667,13 @@ function Home({
           )}
         </h1>
         <p className="home-description">
-          {demo ? (
+          {isHybridDemo ? (
+            <>
+              한 팀은 실제 휴대폰 심박으로 참여하고 나머지 팀은 서버가 채웁니다.
+              <br className="desktop-only" /> 실제 경기 흐름을 그대로 진행하며
+              화면을 녹화할 수 있습니다.
+            </>
+          ) : demo ? (
             <>
               팀과 주자 수를 정하면 서버가 가상 박동을 생성합니다.
               <br className="desktop-only" /> 실제 트랙과 바톤 전환을 그대로
@@ -684,6 +704,30 @@ function Home({
                 onClick={() => setMode("relay")}
               >
                 팀 이어달리기
+              </button>
+            </div>
+          )}
+          {demo && (
+            <div
+              className="mode-picker demo-mode-picker"
+              role="group"
+              aria-label="데모 참가 구성"
+            >
+              <button
+                type="button"
+                className={demoHumanSlot ? "is-selected" : ""}
+                aria-pressed={demoHumanSlot}
+                onClick={() => setDemoHumanSlot(true)}
+              >
+                내가 참여 + MOCK
+              </button>
+              <button
+                type="button"
+                className={!demoHumanSlot ? "is-selected" : ""}
+                aria-pressed={!demoHumanSlot}
+                onClick={() => setDemoHumanSlot(false)}
+              >
+                전체 MOCK 자동
               </button>
             </div>
           )}
@@ -775,9 +819,11 @@ function Home({
         >
           {busy
             ? "경기장 만드는 중…"
-            : demo
-              ? "모의 경기 만들기"
-              : "새 경기 만들기"}
+            : isHybridDemo
+              ? "촬영용 경기 만들기"
+              : demo
+                ? "모의 경기 만들기"
+                : "새 경기 만들기"}
           <ArrowIcon />
         </button>
         {!demo && (
@@ -786,7 +832,7 @@ function Home({
               브라우저로 바로 플레이
             </a>
             <a className="demo-entry" href="/demo">
-              자동 경기 데모
+              촬영 · 자동 경기 모드
             </a>
           </>
         )}
@@ -797,9 +843,11 @@ function Home({
         )}
       </div>
       <p className="edition">
-        {demo
-          ? "가상 박동은 의료 측정값이 아닙니다."
-          : "박동 한 번이 한 걸음이 되는 실시간 경주"}
+        {isHybridDemo
+          ? "실제 참가자 한 자리와 서버 생성 mock 팀으로 진행합니다."
+          : demo
+            ? "가상 박동은 의료 측정값이 아닙니다."
+            : "박동 한 번이 한 걸음이 되는 실시간 경주"}
       </p>
     </main>
   );
@@ -941,6 +989,7 @@ function TopBar({
   watchUrl,
   mode = "host",
   demo = false,
+  demoHumanSlot = false,
   immersive = false,
   onToggleImmersive,
   canLeave = false,
@@ -951,6 +1000,7 @@ function TopBar({
   watchUrl?: string;
   mode?: "host" | "spectator";
   demo?: boolean;
+  demoHumanSlot?: boolean;
   immersive?: boolean;
   onToggleImmersive?: () => void;
   canLeave?: boolean;
@@ -1006,7 +1056,11 @@ function TopBar({
             {mode === "spectator" && (
               <span className="spectator-label">관전 중</span>
             )}
-            {demo && <span className="demo-label">MOCK</span>}
+            {demo && (
+              <span className="demo-label">
+                {demoHumanSlot ? "LIVE + MOCK" : "MOCK"}
+              </span>
+            )}
             <span>방 {code}</span>
           </div>
           {onLeave && canLeave && (
@@ -1052,6 +1106,7 @@ function Lobby({
 }) {
   const [openMenuPlayerId, setOpenMenuPlayerId] = useState<string | null>(null);
   const isRelay = room.mode === "relay" && room.relaySettings !== null;
+  const isHybridDemo = room.demo && room.demoHumanSlot;
   const expectedParticipants = room.relaySettings?.teamCount;
   const readyCount = room.players.filter(
     (player) => player.connected && player.ready,
@@ -1070,11 +1125,15 @@ function Lobby({
       <div className="join-panel">
         <div>
           <p className="eyebrow">
-            {room.demo
-              ? "가상 팀의 준비가 완료되었습니다"
-              : isRelay
-                ? "각 팀의 대표 휴대폰에서 방 코드를 입력하세요"
-                : "휴대폰에서 방 코드를 입력하세요"}
+            {isHybridDemo
+              ? room.players.length > 0
+                ? "실제 팀과 mock 팀이 함께 준비하고 있습니다"
+                : "휴대폰으로 실제 참가자 한 자리를 채워 주세요"
+              : room.demo
+                ? "가상 팀의 준비가 완료되었습니다"
+                : isRelay
+                  ? "각 팀의 대표 휴대폰에서 방 코드를 입력하세요"
+                  : "휴대폰에서 방 코드를 입력하세요"}
           </p>
           <p
             className="room-code"
@@ -1083,12 +1142,14 @@ function Lobby({
             {room.code}
           </p>
           <p className="join-help">
-            {room.demo
-              ? "경기 시작을 누르면 서버가 팀마다 서로 다른 가상 심박을 발생시킵니다."
-              : `심장달리기 앱을 열고 ${isRelay ? "팀 이름" : "닉네임"}과 코드를 입력하세요.`}
+            {isHybridDemo
+              ? "심장달리기 앱으로 입장하면 나머지 자리는 mock 팀이 자동으로 채웁니다."
+              : room.demo
+                ? "경기 시작을 누르면 서버가 팀마다 서로 다른 가상 심박을 발생시킵니다."
+                : `심장달리기 앱을 열고 ${isRelay ? "팀 이름" : "닉네임"}과 코드를 입력하세요.`}
           </p>
         </div>
-        {room.demo ? (
+        {room.demo && !room.demoHumanSlot ? (
           <div className="demo-room-mark" aria-label="모의 경기">
             MOCK
           </div>
@@ -1215,7 +1276,11 @@ function Lobby({
           {room.players.length === 0 && (
             <div className="empty-player-card">
               <span className="scan-line" />
-              <p>첫 번째 심장을 기다리고 있어요</p>
+              <p>
+                {isHybridDemo
+                  ? "실제 참가자의 입장을 기다리고 있어요"
+                  : "첫 번째 심장을 기다리고 있어요"}
+              </p>
             </div>
           )}
         </div>
@@ -1260,7 +1325,11 @@ function Lobby({
                 ? busy
                   ? "입장하는 중…"
                   : "경기장 입장"
-                : "모두의 측정을 기다리는 중"}
+                : isHybridDemo
+                  ? room.players.length === 0
+                    ? "실제 참가자 입장을 기다리는 중"
+                    : "실제 심박 측정을 기다리는 중"
+                  : "모두의 측정을 기다리는 중"}
               {allReady && <ArrowIcon />}
             </button>
           </div>
@@ -1289,7 +1358,11 @@ function CountdownOverlay({ room }: { room: RoomSnapshot }) {
 
   return (
     <div className="countdown-overlay" aria-live="assertive">
-      <p>손가락을 그대로 유지하세요</p>
+      <p>
+        {room.demo && !room.demoHumanSlot
+          ? "가상 박동을 준비하고 있습니다"
+          : "손가락을 그대로 유지하세요"}
+      </p>
       <div className="countdown-number-slot">
         <div
           className={`countdown-number ${display === "준비" ? "is-ready" : ""}`}
@@ -1366,7 +1439,13 @@ function Race({
           {!busy && <ArrowIcon />}
         </button>
       )}
-      <p className="stage-hint">모든 팀이 손가락을 올렸는지 확인하세요</p>
+      <p className="stage-hint">
+        {room.demoHumanSlot
+          ? "실제 참가자의 손가락 측정을 확인하세요"
+          : room.demo
+            ? "mock 팀의 출발 준비가 완료되었습니다"
+            : "모든 팀이 손가락을 올렸는지 확인하세요"}
+      </p>
     </div>
   ) : countingDown ? (
     <CountdownOverlay room={room} />
@@ -1390,16 +1469,20 @@ function Race({
                   ? "출발 준비"
                   : finishing
                     ? "경기 종료"
-                    : room.demo
-                      ? "모의 경기 중"
-                      : "경기 중"}
+                    : room.demoHumanSlot
+                      ? "LIVE + MOCK 경기 중"
+                      : room.demo
+                        ? "모의 경기 중"
+                        : "경기 중"}
             </p>
           </div>
           {!isStadiumRace && (
             <h1>
-              {room.demo
-                ? "가상 심장이 달리고 있습니다"
-                : "심장이 달리고 있습니다"}
+              {room.demoHumanSlot
+                ? "나의 심장과 봇이 함께 달립니다"
+                : room.demo
+                  ? "가상 심장이 달리고 있습니다"
+                  : "심장이 달리고 있습니다"}
             </h1>
           )}
         </div>

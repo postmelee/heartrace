@@ -54,8 +54,7 @@ export default function PlayChallenge() {
     if (phase !== "racing") return;
     if (playerBeats < FINISH_BEATS && rivalBeats < FINISH_BEATS) return;
 
-    const playerWon =
-      playerBeats >= FINISH_BEATS && playerBeats >= rivalBeats;
+    const playerWon = playerBeats >= FINISH_BEATS && playerBeats >= rivalBeats;
     setWinner(playerWon ? "player" : "rival");
     setElapsedMs(Math.max(1, performance.now() - raceStartedAtRef.current));
     setPhase("finished");
@@ -122,9 +121,8 @@ export default function PlayChallenge() {
             </span>
           </h1>
           <p className="play-description">
-            탭하거나 스페이스바를 누를 때마다 당신의 심장이 한 걸음
-            전진합니다. 24번의 박동으로 페이스메이커보다 먼저 결승선에
-            도착하세요.
+            탭하거나 스페이스바를 누를 때마다 당신의 심장이 한 걸음 전진합니다.
+            24번의 박동으로 페이스메이커보다 먼저 결승선에 도착하세요.
           </p>
           <dl className="play-rules">
             <div>
@@ -142,7 +140,10 @@ export default function PlayChallenge() {
           </dl>
         </section>
 
-        <section className={`play-card is-${phase}`} aria-label="심장달리기 경기장">
+        <section
+          className={`play-card is-${phase}`}
+          aria-label="심장달리기 경기장"
+        >
           <div className="play-card-heading">
             <div>
               <span>현재 상태</span>
@@ -168,14 +169,22 @@ export default function PlayChallenge() {
 
           <div className="play-control-zone">
             {phase === "intro" && (
-              <button className="play-start-button" type="button" onClick={startRace}>
+              <button
+                className="play-start-button"
+                type="button"
+                onClick={startRace}
+              >
                 바로 달리기
                 <span aria-hidden="true">→</span>
               </button>
             )}
 
             {phase === "countdown" && (
-              <div className="play-countdown" aria-live="assertive" key={countdown}>
+              <div
+                className="play-countdown"
+                aria-live="assertive"
+                key={countdown}
+              >
                 <strong>{countdown}</strong>
                 <span>손가락을 준비하세요</span>
               </div>
@@ -205,7 +214,9 @@ export default function PlayChallenge() {
                 </div>
                 <div>
                   <strong>
-                    {winner === "player" ? "결승선 통과!" : "한 번 더 달려볼까요?"}
+                    {winner === "player"
+                      ? "결승선 통과!"
+                      : "한 번 더 달려볼까요?"}
                   </strong>
                   <span>
                     {tapTempo == null
@@ -230,7 +241,7 @@ export default function PlayChallenge() {
         <div>
           <a href="/privacy">개인정보 안내</a>
           <a href="/notices">오픈소스 고지</a>
-          <a href="/demo">자동 경기 데모</a>
+          <a href="/demo">촬영 · 자동 경기 모드</a>
         </div>
       </footer>
     </main>

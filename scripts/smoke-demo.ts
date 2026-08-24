@@ -25,6 +25,10 @@ async function main(): Promise<void> {
     const created = await createDemoRoom(host);
     assert(created.room.demo, "모의 경기 방으로 표시되어야 합니다.");
     assert(
+      !created.room.demoHumanSlot,
+      "전체 자동 데모에는 실제 참가자 슬롯이 없어야 합니다.",
+    );
+    assert(
       created.room.players.length === 6,
       "여섯 가상 팀이 입장해야 합니다.",
     );

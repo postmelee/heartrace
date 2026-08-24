@@ -19,6 +19,7 @@
     "smoke": "tsx scripts/smoke-race.ts",
     "smoke:relay": "tsx scripts/smoke-relay.ts",
     "smoke:demo": "tsx scripts/smoke-demo.ts",
+    "smoke:demo-hybrid": "tsx scripts/smoke-hybrid-demo.ts",
     "simulate:hybrid-relay": "tsx scripts/simulate-hybrid-relay.ts",
     "benchmark:ppg:but": "tsx scripts/benchmark-butppg.ts",
     "analyze:ppg:trace": "tsx scripts/analyze-ppg-trace.ts",

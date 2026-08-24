@@ -103,7 +103,7 @@ export default function App() {
   return (
     <SafeAreaProvider>
       <StatusBar style="dark" />
-        <HeartRunApp />
+      <HeartRunApp />
     </SafeAreaProvider>
   );
 }
@@ -1303,6 +1303,7 @@ function RacePreviewExperience({ onExit }: { onExit: () => void }) {
     mode: "relay",
     trackMode: "circular",
     demo: true,
+    demoHumanSlot: false,
     relaySettings: {
       teamCount: 2,
       runnersPerTeam: 3,

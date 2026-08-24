@@ -110,6 +110,18 @@ button {
   max-width: 1280px;
   padding: 8vh 0;
 }
+.home.is-hybrid-demo .home-copy {
+  padding-block: clamp(18px, 3.5vh, 44px);
+}
+.home.is-hybrid-demo .display-category {
+  font-size: clamp(36px, 4.4vw, 72px);
+}
+.home.is-hybrid-demo h1 {
+  font-size: clamp(44px, 6.2vw, 104px);
+}
+.home.is-hybrid-demo .home-description {
+  margin-top: clamp(20px, 3vh, 30px);
+}
 .eyebrow {
   margin: 0 0 18px;
   color: #6e6153;
@@ -202,6 +214,10 @@ button {
   background: #fff;
   color: var(--ink);
   box-shadow: 0 2px 8px rgb(0 0 0 / 8%);
+}
+.demo-mode-picker button {
+  min-width: 142px;
+  white-space: nowrap;
 }
 .relay-options {
   display: flex;
