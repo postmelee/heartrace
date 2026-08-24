@@ -9,8 +9,8 @@
 - License: SIL Open Font License 1.1
 - Use: 웹과 모바일 앱의 한글·영문 UI 글꼴
 
-라이선스 전문은 설치 패키지의 `node_modules/pretendard/dist/LICENSE.txt`에
-포함되어 있습니다.
+라이선스 전문은 설치 패키지의 `node_modules/pretendard/dist/LICENSE.txt`와
+웹 배포물의 `apps/host/public/third-party-notices.txt`에 포함되어 있습니다.
 
 ## BUT PPG 1.0.0
 

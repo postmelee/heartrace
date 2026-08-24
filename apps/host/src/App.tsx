@@ -39,6 +39,7 @@ export default function App() {
   if (path === "/join") return <JoinLanding />;
   if (path === "/watch") return <SpectatorApp />;
   if (path === "/privacy") return <PrivacyPage />;
+  if (path === "/notices") return <NoticesPage />;
   if (path === "/support") return <SupportPage />;
   if (path === "/play") return <PlayChallenge />;
   if (path === "/demo") return <HostApp demo />;
@@ -462,6 +463,7 @@ function JoinLanding() {
 
       <footer className="public-footer">
         <a href="/privacy">개인정보 처리방침</a>
+        <a href="/notices">오픈소스 고지</a>
         <a href="/support">도움말</a>
       </footer>
     </main>
@@ -525,6 +527,26 @@ function SupportPage() {
   );
 }
 
+function NoticesPage() {
+  return (
+    <PublicDocument title="오픈소스 고지">
+      <h2>Pretendard</h2>
+      <p>
+        웹과 모바일 인터페이스는 Kil Hyung-jin이 제작한 Pretendard 글꼴을
+        사용합니다. Pretendard는 SIL Open Font License 1.1에 따라 배포됩니다.
+      </p>
+      <p>
+        <a href="/third-party-notices.txt">저작권 고지와 라이선스 전문 보기</a>
+      </p>
+      <h2>런타임 라이브러리</h2>
+      <p>
+        React, React Native, Expo, Express, Socket.IO, Vite와 기타 오픈소스
+        라이브러리를 각 프로젝트의 라이선스에 따라 사용합니다.
+      </p>
+    </PublicDocument>
+  );
+}
+
 function PublicDocument({
   title,
   children,
@@ -542,6 +564,7 @@ function PublicDocument({
       </article>
       <footer className="public-footer">
         <a href="/join">참가 안내</a>
+        <a href="/notices">오픈소스 고지</a>
         <a href="/support">도움말</a>
       </footer>
     </main>

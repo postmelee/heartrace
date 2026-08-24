@@ -228,6 +228,7 @@ export default function PlayChallenge() {
         </p>
         <div>
           <a href="/privacy">개인정보 안내</a>
+          <a href="/notices">오픈소스 고지</a>
           <a href="/demo">자동 경기 데모</a>
         </div>
       </footer>
