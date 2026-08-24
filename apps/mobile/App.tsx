@@ -55,7 +55,7 @@ import {
   type HeartRateSource,
   type HeartRateState,
 } from "./src/measurement/useHeartRate";
-import { colors, fonts } from "./src/theme";
+import { colors, fonts, layout, radii, spacing } from "./src/theme";
 
 const DEV_SIMULATOR =
   __DEV__ || process.env.EXPO_PUBLIC_ENABLE_SIMULATOR === "true";
@@ -65,8 +65,8 @@ const PUBLIC_URL =
   process.env.EXPO_PUBLIC_PUBLIC_URL ??
   "https://heartrace-postmelee.onrender.com";
 const RACE_CAMERA_SIZE = 154;
-const RACE_INK = "#050505";
-const RACE_PAPER = "#FFFFFF";
+const RACE_INK = colors.ink;
+const RACE_PAPER = colors.paper;
 
 interface CameraPreviewTarget {
   x: number;
@@ -648,8 +648,14 @@ function JoinScreen({
           </View>
           <View style={styles.joinCopy}>
             <Text style={styles.eyebrow}>한 박동, 한 걸음</Text>
-            <Text maxFontSizeMultiplier={1.1} style={styles.joinTitle}>
-              심장으로{`\n`}달릴 준비가 됐나요?
+            <Text
+              adjustsFontSizeToFit
+              maxFontSizeMultiplier={1.1}
+              minimumFontScale={0.78}
+              numberOfLines={2}
+              style={styles.joinTitle}
+            >
+              손끝으로 뛰고,{`\n`}심장으로 달리세요.
             </Text>
             <Text style={styles.bodyText}>
               몸은 그대로 두고, 손끝에서 뛰는 심장으로 경주합니다.
@@ -2271,9 +2277,13 @@ const styles = StyleSheet.create({
   },
   loadingBackground: { flex: 1, backgroundColor: colors.paper },
   flex: { flex: 1 },
-  screen: { flex: 1, paddingHorizontal: 24, backgroundColor: colors.paper },
+  screen: {
+    flex: 1,
+    paddingHorizontal: layout.screenPadding,
+    backgroundColor: colors.paper,
+  },
   screenHeader: {
-    height: 64,
+    height: layout.headerHeight,
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "space-between",
@@ -2366,29 +2376,29 @@ const styles = StyleSheet.create({
 
   joinScreen: {
     flex: 1,
-    paddingHorizontal: 24,
+    paddingHorizontal: layout.screenPadding,
     justifyContent: "space-between",
     backgroundColor: colors.paper,
   },
   joinScrollContent: { flexGrow: 1 },
-  joinCopy: { paddingTop: 24 },
+  joinCopy: { paddingTop: spacing.lg },
   joinTitle: {
     color: colors.ink,
     fontFamily: fonts.bold,
     fontSize: 38,
     lineHeight: 42,
     letterSpacing: -1.8,
-    marginBottom: 24,
+    marginBottom: spacing.lg,
   },
-  form: { paddingBottom: 12, gap: 14 },
-  inputGroup: { gap: 8 },
+  form: { paddingBottom: spacing.sm, gap: spacing.sm },
+  inputGroup: { gap: spacing.xs },
   inputLabel: { color: colors.muted, fontFamily: fonts.medium, fontSize: 12 },
   textInput: {
-    height: 62,
+    height: layout.controlHeight,
     borderWidth: 1,
     borderColor: colors.line,
-    borderRadius: 18,
-    paddingHorizontal: 18,
+    borderRadius: radii.lg,
+    paddingHorizontal: spacing.md,
     color: colors.ink,
     backgroundColor: colors.surface,
     fontFamily: fonts.semibold,
@@ -2413,7 +2423,7 @@ const styles = StyleSheet.create({
     fontSize: 11,
     lineHeight: 17,
     textAlign: "center",
-    paddingHorizontal: 24,
+    paddingHorizontal: spacing.lg,
   },
   privacyArea: { alignItems: "center", gap: 6 },
   privacyLink: {
@@ -2423,9 +2433,9 @@ const styles = StyleSheet.create({
     textDecorationLine: "underline",
   },
   primaryButton: {
-    minHeight: 62,
-    paddingHorizontal: 22,
-    borderRadius: 19,
+    minHeight: layout.controlHeight,
+    paddingHorizontal: spacing.lg,
+    borderRadius: radii.lg,
     backgroundColor: colors.ink,
     flexDirection: "row",
     alignItems: "center",
@@ -2472,7 +2482,7 @@ const styles = StyleSheet.create({
     justifyContent: "center",
     overflow: "hidden",
   },
-  cameraLensPreview: { backgroundColor: "#222222" },
+  cameraLensPreview: { backgroundColor: colors.ink },
   previewHeartGlyph: {
     position: "absolute",
     color: colors.paper,
@@ -2663,7 +2673,7 @@ const styles = StyleSheet.create({
     left: 0,
     overflow: "hidden",
     borderWidth: 2,
-    backgroundColor: "#231919",
+    backgroundColor: colors.ink,
     alignItems: "center",
     justifyContent: "center",
   },
@@ -2717,7 +2727,7 @@ const styles = StyleSheet.create({
     right: 0,
     bottom: 0,
     left: 0,
-    backgroundColor: "#C8002A",
+    backgroundColor: colors.moss,
   },
   handoffEyebrow: {
     color: colors.muted,
@@ -3030,9 +3040,9 @@ const styles = StyleSheet.create({
 
   finishScreen: {
     flex: 1,
-    paddingHorizontal: 24,
-    paddingTop: 24,
-    paddingBottom: 12,
+    paddingHorizontal: layout.screenPadding,
+    paddingTop: spacing.lg,
+    paddingBottom: spacing.sm,
     backgroundColor: colors.paper,
   },
   finishMain: { paddingTop: 20, paddingBottom: 28 },
@@ -3096,7 +3106,7 @@ const styles = StyleSheet.create({
 
   permissionScreen: {
     flex: 1,
-    padding: 24,
+    padding: layout.screenPadding,
     paddingTop: 84,
     justifyContent: "space-between",
     backgroundColor: colors.paper,

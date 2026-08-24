@@ -498,6 +498,9 @@ button {
   border-color: var(--ink);
   outline: none;
 }
+.public-open-app {
+  grid-column: 1 / -1;
+}
 .tester-steps {
   margin-top: 48px;
   padding-top: 26px;

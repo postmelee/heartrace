@@ -1,0 +1,12 @@
+{
+  "configVersion": 0,
+  "apple": {
+    "version": "1.0",
+    "info": {
+      "en-US": {
+        "title": "심장달리기",
+        "privacyPolicyUrl": "https://heartrace-postmelee.onrender.com/privacy"
+      }
+    }
+  }
+}

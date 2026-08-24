@@ -31,6 +31,11 @@ https://heartrace-postmelee.onrender.com/play
 
 https://heartrace-postmelee.onrender.com/submission/demo.mp4
 
+### 모바일 테스트 링크
+
+- iOS TestFlight: https://testflight.apple.com/join/TJXqEQfy
+- Android APK: https://heartrace-postmelee.onrender.com/downloads/simjangdalrigi-android.apk
+
 ### Codex와 함께 게임을 만든 과정
 
 Codex를 설계·구현·검증 전 과정의 개발 파트너로 사용했습니다. 모노레포를

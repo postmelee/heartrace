@@ -22,6 +22,7 @@ import PlayChallenge from "./PlayChallenge";
 const SOCKET_URL = import.meta.env.VITE_SOCKET_URL ?? "http://localhost:3001";
 const PUBLIC_URL = import.meta.env.VITE_PUBLIC_URL ?? window.location.origin;
 const IOS_INSTALL_URL = import.meta.env.VITE_IOS_INSTALL_URL ?? "";
+const ANDROID_INSTALL_URL = import.meta.env.VITE_ANDROID_INSTALL_URL ?? "";
 const STORAGE_KEY = "heartrace:host-session";
 const DEMO_STORAGE_KEY = "heartrace:demo-host-session";
 const IMMERSIVE_KEY = "heartrace:immersive";
@@ -445,7 +446,16 @@ function JoinLanding() {
         ) : (
           <span className="primary-button is-disabled">테스트 앱 준비 중</span>
         )}
-        <a className="secondary-button" href={appUrl}>
+        {ANDROID_INSTALL_URL ? (
+          <a className="secondary-button" download href={ANDROID_INSTALL_URL}>
+            Android APK 받기
+          </a>
+        ) : (
+          <span className="secondary-button is-disabled">
+            Android 앱 준비 중
+          </span>
+        )}
+        <a className="secondary-button public-open-app" href={appUrl}>
           설치된 앱 열기
         </a>
       </div>
