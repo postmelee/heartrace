@@ -10,14 +10,15 @@ import {
 } from "@heartrace/protocol";
 import type {
   AcceptedBeat,
+  BeatEvent,
   ClientToServerEvents,
   HostCreateRoomRequest,
+  PlayerJoinResponse,
   PlayerRelaySnapshot,
   PlayerSnapshot,
   RoomSnapshot,
   ServerToClientEvents,
 } from "@heartrace/protocol";
-import PlayChallenge from "./PlayChallenge";
 
 const SOCKET_URL = import.meta.env.VITE_SOCKET_URL ?? "http://localhost:3001";
 const PUBLIC_URL = import.meta.env.VITE_PUBLIC_URL ?? window.location.origin;
@@ -27,12 +28,32 @@ const STORAGE_KEY = "heartrace:host-session";
 const DEMO_STORAGE_KEY = "heartrace:demo-host-session";
 const IMMERSIVE_KEY = "heartrace:immersive";
 const RESULT_REVEAL_DELAY_MS = 3_000;
+const BROWSER_INPUT_MIN_GAP_MS = 300;
+const BROWSER_PLAY_REQUEST: HostCreateRoomRequest = {
+  mode: "relay",
+  trackMode: "circular",
+  demo: true,
+  demoHumanSlot: true,
+  relay: {
+    teamCount: 4,
+    runnersPerTeam: 2,
+    legBeats: 10,
+    handoffDurationMs: DEFAULT_HANDOFF_DURATION_MS,
+  },
+};
 
 type GameSocket = Socket<ServerToClientEvents, ClientToServerEvents>;
 
 interface HostSession {
   roomCode: string;
   hostToken: string;
+}
+
+interface BrowserPlayerSession {
+  roomCode: string;
+  nickname: string;
+  playerId: string;
+  playerToken: string;
 }
 
 export default function App() {
@@ -42,7 +63,7 @@ export default function App() {
   if (path === "/privacy") return <PrivacyPage />;
   if (path === "/notices") return <NoticesPage />;
   if (path === "/support") return <SupportPage />;
-  if (path === "/play") return <PlayChallenge />;
+  if (path === "/play") return <BrowserPlayApp />;
   if (path === "/demo") return <HostApp demo />;
   return <HostApp />;
 }
@@ -259,6 +280,539 @@ function HostApp({ demo = false }: { demo?: boolean }) {
   );
 }
 
+/**
+ * 설치 없는 체험에서도 실제 호스트 경기와 서버 판정을 그대로 사용합니다.
+ * 두 소켓은 각각 호스트와 참가자 역할을 맡고, 카메라 PPG만 키보드/탭 입력으로
+ * 바꿉니다. 자동 주자, 바톤 전환, 순위와 결승 판정은 모두 서버가 처리합니다.
+ */
+function BrowserPlayApp() {
+  const hostSocketRef = useRef<GameSocket | null>(null);
+  const playerSocketRef = useRef<GameSocket | null>(null);
+  const hostSessionRef = useRef<HostSession | null>(null);
+  const playerSessionRef = useRef<BrowserPlayerSession | null>(null);
+  const roomRef = useRef<RoomSnapshot | null>(null);
+  const beatSequenceRef = useRef(-1);
+  const lastInputAtRef = useRef(0);
+  const [hostConnected, setHostConnected] = useState(false);
+  const [playerConnected, setPlayerConnected] = useState(false);
+  const [room, setRoom] = useState<RoomSnapshot | null>(null);
+  const [error, setError] = useState<string | null>(null);
+  const [busy, setBusy] = useState(false);
+  const [beatNotice, setBeatNotice] = useState(
+    "경기가 시작되면 스페이스바나 버튼으로 박동을 보내세요.",
+  );
+  const [beatEffects, setBeatEffects] = useState<Record<string, AcceptedBeat>>(
+    {},
+  );
+  const [immersive, setImmersive] = useImmersive();
+  const finishInterlude = useFinishInterlude(room);
+
+  const updateRoom = useCallback((nextRoom: RoomSnapshot) => {
+    roomRef.current = nextRoom;
+    if (nextRoom.phase === "lobby") setBeatEffects({});
+    setRoom(nextRoom);
+  }, []);
+
+  useEffect(() => {
+    let disposed = false;
+    let hostSetupInFlight = false;
+    let playerResumeInFlight = false;
+    const hostSocket: GameSocket = io(SOCKET_URL, {
+      reconnection: true,
+      reconnectionDelay: 400,
+      timeout: 8_000,
+    });
+    const playerSocket: GameSocket = io(SOCKET_URL, {
+      reconnection: true,
+      reconnectionDelay: 400,
+      timeout: 8_000,
+    });
+    hostSocketRef.current = hostSocket;
+    playerSocketRef.current = playerSocket;
+
+    const failSetup = (cause: unknown) => {
+      if (disposed) return;
+      setError(
+        cause instanceof Error
+          ? cause.message
+          : "브라우저 체험 경기를 준비하지 못했습니다.",
+      );
+    };
+
+    const waitForPlayerConnection = async (): Promise<void> => {
+      if (playerSocket.connected) return;
+      await new Promise<void>((resolve, reject) => {
+        const timer = window.setTimeout(() => {
+          cleanup();
+          reject(new Error("경기 서버 연결 시간이 초과됐습니다."));
+        }, 8_000);
+        const onConnect = () => {
+          cleanup();
+          resolve();
+        };
+        const onError = () => {
+          cleanup();
+          reject(new Error("경기 서버에 연결하지 못했습니다."));
+        };
+        const cleanup = () => {
+          window.clearTimeout(timer);
+          playerSocket.off("connect", onConnect);
+          playerSocket.off("connect_error", onError);
+        };
+        playerSocket.on("connect", onConnect);
+        playerSocket.on("connect_error", onError);
+      });
+    };
+
+    const markBrowserPlayerReady = async (): Promise<void> => {
+      const measured = await playerSocket
+        .timeout(5_000)
+        .emitWithAck("player:measurement", {
+          state: "ready",
+          bpm: 80,
+          signalQuality: 0.96,
+        });
+      if (!measured.ok) throw new Error(measured.error);
+    };
+
+    const rememberPlayer = (joined: PlayerJoinResponse) => {
+      const nextSession: BrowserPlayerSession = {
+        roomCode: joined.room.code,
+        nickname: "나의 심장",
+        playerId: joined.playerId,
+        playerToken: joined.playerToken,
+      };
+      playerSessionRef.current = nextSession;
+      beatSequenceRef.current = joined.lastBeatSequence;
+      updateRoom(joined.room);
+    };
+
+    const createBrowserRoom = async (): Promise<void> => {
+      const created = await hostSocket
+        .timeout(8_000)
+        .emitWithAck("host:create-room", BROWSER_PLAY_REQUEST);
+      if (!created.ok) throw new Error(created.error);
+      if (disposed) return;
+
+      const nextHostSession: HostSession = {
+        roomCode: created.data.room.code,
+        hostToken: created.data.hostToken,
+      };
+      hostSessionRef.current = nextHostSession;
+      updateRoom(created.data.room);
+
+      await waitForPlayerConnection();
+      if (disposed) return;
+      const joined = await playerSocket
+        .timeout(8_000)
+        .emitWithAck("player:join", {
+          roomCode: created.data.room.code,
+          nickname: "나의 심장",
+          runnerNames: ["첫 번째 주자", "두 번째 주자"],
+        });
+      if (!joined.ok) throw new Error(joined.error);
+      if (disposed) return;
+      rememberPlayer(joined.data);
+      await markBrowserPlayerReady();
+      if (!disposed) {
+        setError(null);
+        setBeatNotice("경기가 시작되면 스페이스바나 버튼으로 박동을 보내세요.");
+      }
+    };
+
+    const resumeOrCreateHost = async (): Promise<void> => {
+      if (hostSetupInFlight || disposed) return;
+      hostSetupInFlight = true;
+      try {
+        const session = hostSessionRef.current;
+        if (session) {
+          const resumed = await hostSocket
+            .timeout(8_000)
+            .emitWithAck("host:resume", session);
+          if (resumed.ok) {
+            if (!disposed) {
+              updateRoom(resumed.data.room);
+              setError(null);
+            }
+            return;
+          }
+          hostSessionRef.current = null;
+          playerSessionRef.current = null;
+        }
+        await createBrowserRoom();
+      } catch (cause) {
+        failSetup(cause);
+      } finally {
+        hostSetupInFlight = false;
+      }
+    };
+
+    const resumePlayer = async (): Promise<void> => {
+      const session = playerSessionRef.current;
+      if (!session || playerResumeInFlight || disposed) return;
+      playerResumeInFlight = true;
+      try {
+        const resumed = await playerSocket
+          .timeout(8_000)
+          .emitWithAck("player:join", {
+            roomCode: session.roomCode,
+            nickname: session.nickname,
+            playerId: session.playerId,
+            playerToken: session.playerToken,
+          });
+        if (!resumed.ok) throw new Error(resumed.error);
+        if (disposed) return;
+        rememberPlayer(resumed.data);
+        if (resumed.data.room.phase === "lobby") {
+          await markBrowserPlayerReady();
+        }
+        if (!disposed) setError(null);
+      } catch (cause) {
+        failSetup(cause);
+      } finally {
+        playerResumeInFlight = false;
+      }
+    };
+
+    hostSocket.on("connect", () => {
+      setHostConnected(true);
+      void resumeOrCreateHost();
+    });
+    hostSocket.on("disconnect", () => setHostConnected(false));
+    hostSocket.on("connect_error", () => setHostConnected(false));
+    hostSocket.on("room:snapshot", updateRoom);
+    hostSocket.on("race:finished", updateRoom);
+    hostSocket.on("race:beat", (event) => {
+      setBeatEffects((current) => ({ ...current, [event.playerId]: event }));
+    });
+
+    playerSocket.on("connect", () => {
+      setPlayerConnected(true);
+      void resumePlayer();
+    });
+    playerSocket.on("disconnect", () => setPlayerConnected(false));
+    playerSocket.on("connect_error", () => setPlayerConnected(false));
+    playerSocket.on("player:removed", (event) => {
+      if (event.playerId !== playerSessionRef.current?.playerId) return;
+      setError("브라우저 참가자 연결이 종료됐습니다. 다시 시도해 주세요.");
+    });
+
+    return () => {
+      disposed = true;
+      hostSocket.disconnect();
+      playerSocket.disconnect();
+      hostSocketRef.current = null;
+      playerSocketRef.current = null;
+      hostSessionRef.current = null;
+      playerSessionRef.current = null;
+      roomRef.current = null;
+    };
+  }, [updateRoom]);
+
+  const startRace = useCallback(async () => {
+    const socket = hostSocketRef.current;
+    const session = hostSessionRef.current;
+    if (!socket?.connected || !session) {
+      setError("경기 서버와 연결 중입니다. 잠시 후 다시 눌러 주세요.");
+      return;
+    }
+    setBusy(true);
+    setError(null);
+    try {
+      const result = await socket
+        .timeout(8_000)
+        .emitWithAck("host:start", session);
+      if (!result.ok) throw new Error(result.error);
+      setBeatNotice("출발 신호 뒤부터 입력할 수 있어요.");
+    } catch (cause) {
+      setError(
+        cause instanceof Error ? cause.message : "경기를 시작하지 못했습니다.",
+      );
+    } finally {
+      setBusy(false);
+    }
+  }, []);
+
+  const resetRace = useCallback(async () => {
+    const hostSocket = hostSocketRef.current;
+    const playerSocket = playerSocketRef.current;
+    const session = hostSessionRef.current;
+    if (!hostSocket?.connected || !playerSocket?.connected || !session) {
+      setError("경기 서버와 연결 중입니다. 잠시 후 다시 눌러 주세요.");
+      return;
+    }
+    setBusy(true);
+    setError(null);
+    try {
+      const reset = await hostSocket
+        .timeout(8_000)
+        .emitWithAck("host:reset", session);
+      if (!reset.ok) throw new Error(reset.error);
+      beatSequenceRef.current = -1;
+      lastInputAtRef.current = 0;
+      setBeatEffects({});
+      updateRoom(reset.data.room);
+      const measured = await playerSocket
+        .timeout(5_000)
+        .emitWithAck("player:measurement", {
+          state: "ready",
+          bpm: 80,
+          signalQuality: 0.96,
+        });
+      if (!measured.ok) throw new Error(measured.error);
+      setBeatNotice("경기가 시작되면 스페이스바나 버튼으로 박동을 보내세요.");
+    } catch (cause) {
+      setError(
+        cause instanceof Error
+          ? cause.message
+          : "새 경기를 준비하지 못했습니다.",
+      );
+    } finally {
+      setBusy(false);
+    }
+  }, [updateRoom]);
+
+  const endRace = useCallback(async () => {
+    const socket = hostSocketRef.current;
+    const session = hostSessionRef.current;
+    if (!socket?.connected || !session) {
+      setError("경기 서버와 연결 중입니다. 잠시 후 다시 눌러 주세요.");
+      return;
+    }
+    setBusy(true);
+    setError(null);
+    try {
+      const result = await socket
+        .timeout(8_000)
+        .emitWithAck("host:end", session);
+      if (!result.ok) throw new Error(result.error);
+      updateRoom(result.data.room);
+    } catch (cause) {
+      setError(
+        cause instanceof Error ? cause.message : "경기를 종료하지 못했습니다.",
+      );
+    } finally {
+      setBusy(false);
+    }
+  }, [updateRoom]);
+
+  const sendBrowserBeat = useCallback(async () => {
+    const socket = playerSocketRef.current;
+    const session = playerSessionRef.current;
+    const currentRoom = roomRef.current;
+    const player = currentRoom?.players.find(
+      (candidate) => candidate.id === session?.playerId,
+    );
+    if (!socket?.connected || !session || !currentRoom || !player) {
+      setBeatNotice("경기 서버에 다시 연결하고 있습니다.");
+      return;
+    }
+    if (currentRoom.phase !== "racing") {
+      setBeatNotice("출발 신호 뒤부터 입력할 수 있어요.");
+      return;
+    }
+    if (player.finishPlace !== null) {
+      setBeatNotice("완주했습니다. 다른 팀의 도착을 기다려 주세요.");
+      return;
+    }
+    if (player.relay?.status === "handoff") {
+      setBeatNotice("바톤 전달이 끝나면 다시 입력할 수 있어요.");
+      return;
+    }
+    const now = Date.now();
+    const elapsed =
+      lastInputAtRef.current === 0 ? 750 : now - lastInputAtRef.current;
+    if (lastInputAtRef.current !== 0 && elapsed < BROWSER_INPUT_MIN_GAP_MS) {
+      setBeatNotice("박동 사이를 조금만 띄워 주세요.");
+      return;
+    }
+
+    const sequence = beatSequenceRef.current + 1;
+    // 바톤 전달처럼 긴 의도적 공백은 심박 30 BPM으로 보이지 않게 기본 템포로
+    // 다시 시작합니다. 이후 입력부터는 실제 키 간격을 BPM으로 표시합니다.
+    const inputInterval = elapsed > 2_000 ? 750 : elapsed;
+    const ibiMs = Math.max(270, Math.min(2_000, Math.round(inputInterval)));
+    const event: BeatEvent = {
+      id: crypto.randomUUID(),
+      sequence,
+      detectedAt: now,
+      ibiMs,
+      bpm: Math.max(30, Math.min(220, Math.round(60_000 / ibiMs))),
+      confidence: 0.97,
+      signalQuality: 0.96,
+      source: "observed",
+    };
+    beatSequenceRef.current = sequence;
+    lastInputAtRef.current = now;
+
+    try {
+      const result = await socket
+        .timeout(5_000)
+        .emitWithAck("player:beat", event);
+      if (!result.ok) throw new Error(result.error);
+      if (result.data.accepted) {
+        setBeatNotice(`박동 ${result.data.beatCount}회가 경기장에 전달됐어요.`);
+      } else {
+        setBeatNotice(
+          result.data.reason === "handoff"
+            ? "바톤 전달이 끝나면 다시 입력할 수 있어요."
+            : result.data.reason === "invalid_interval"
+              ? "박동 사이를 조금만 띄워 주세요."
+              : result.data.reason === "finished"
+                ? "완주했습니다. 다른 팀의 도착을 기다려 주세요."
+                : "이번 입력은 판정에 반영되지 않았습니다.",
+        );
+      }
+    } catch {
+      setBeatNotice("입력을 전달하지 못했습니다. 다시 눌러 주세요.");
+    }
+  }, []);
+
+  useEffect(() => {
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (event.code !== "Space" || event.repeat) return;
+      const target = event.target;
+      if (
+        target instanceof HTMLInputElement ||
+        target instanceof HTMLTextAreaElement ||
+        target instanceof HTMLSelectElement ||
+        (target instanceof HTMLElement && target.isContentEditable)
+      ) {
+        return;
+      }
+      event.preventDefault();
+      void sendBrowserBeat();
+    };
+    window.addEventListener("keydown", onKeyDown);
+    return () => window.removeEventListener("keydown", onKeyDown);
+  }, [sendBrowserBeat]);
+
+  if (!room || !hostSessionRef.current || !playerSessionRef.current) {
+    return (
+      <SpectatorNotice
+        eyebrow="BROWSER PLAY"
+        title={error ?? "실제 경기장을 준비하고 있습니다."}
+        description="브라우저 참가자 한 팀과 서버 자동 주자 세 팀을 연결하는 중입니다."
+        retry={Boolean(error)}
+      />
+    );
+  }
+
+  const connected = hostConnected && playerConnected;
+  const ownPlayer = room.players.find(
+    (candidate) => candidate.id === playerSessionRef.current?.playerId,
+  );
+  const watchUrl = new URL("/watch", PUBLIC_URL);
+  watchUrl.searchParams.set("room", room.code);
+  const inputControl = (
+    <BrowserBeatControl
+      room={room}
+      player={ownPlayer}
+      connected={connected}
+      notice={beatNotice}
+      onBeat={sendBrowserBeat}
+    />
+  );
+
+  return (
+    <main className={`app-shell ${immersive ? "is-immersive" : ""}`}>
+      <TopBar
+        connected={connected}
+        code={room.code}
+        watchUrl={watchUrl.toString()}
+        demo={room.demo}
+        demoHumanSlot={room.demoHumanSlot}
+        immersive={immersive}
+        onToggleImmersive={() => setImmersive((current) => !current)}
+      />
+      {error && <ErrorToast message={error} onDismiss={() => setError(null)} />}
+      {(room.phase === "lobby" ||
+        room.phase === "countdown" ||
+        room.phase === "racing" ||
+        finishInterlude) && (
+        <Race
+          room={room}
+          beatEffects={beatEffects}
+          busy={busy}
+          staged={room.phase === "lobby"}
+          countingDown={room.phase === "countdown"}
+          finishing={finishInterlude}
+          onStart={startRace}
+          onEnd={room.phase === "countdown" ? resetRace : endRace}
+          stageHint="스페이스바 또는 박동 버튼을 준비하세요"
+          browserInput
+          inputControl={inputControl}
+        />
+      )}
+      {room.phase === "finished" && !finishInterlude && (
+        <Finish room={room} busy={busy} onReset={resetRace} />
+      )}
+    </main>
+  );
+}
+
+function BrowserBeatControl({
+  room,
+  player,
+  connected,
+  notice,
+  onBeat,
+}: {
+  room: RoomSnapshot;
+  player: PlayerSnapshot | undefined;
+  connected: boolean;
+  notice: string;
+  onBeat: () => void | Promise<void>;
+}) {
+  const relay = player?.relay;
+  const handoff = relay?.status === "handoff";
+  const finished =
+    player?.finishPlace !== null && player?.finishPlace !== undefined;
+  const canSend =
+    connected &&
+    room.phase === "racing" &&
+    Boolean(player) &&
+    !handoff &&
+    !finished;
+  const label = !connected
+    ? "재연결 중"
+    : room.phase === "lobby"
+      ? "경기 시작 대기"
+      : room.phase === "countdown"
+        ? "출발 준비 중"
+        : handoff
+          ? "바톤 전달 중"
+          : finished
+            ? "완주"
+            : "박동 보내기";
+  const progress = relay
+    ? `${relay.activeRunnerIndex + 1}/${relay.runners.length} 주자 · ${relay.legBeatCount}/${room.finishBeats} 박동`
+    : "한 번의 입력 = 한 걸음";
+
+  return (
+    <aside className="browser-beat-rail" aria-label="브라우저 박동 입력">
+      <span className="browser-beat-kicker">브라우저 박동</span>
+      <button
+        className="browser-beat-button"
+        type="button"
+        onClick={() => void onBeat()}
+        disabled={!canSend}
+        aria-keyshortcuts="Space"
+      >
+        <span className="browser-beat-heart" aria-hidden="true">
+          <HeartSolid />
+        </span>
+        <strong>{label}</strong>
+        <small>{canSend ? "SPACE · TAP" : progress}</small>
+      </button>
+      <p className="browser-beat-progress">{progress}</p>
+      <p className="browser-beat-notice" aria-live="polite">
+        {notice}
+      </p>
+    </aside>
+  );
+}
+
 function SpectatorApp() {
   const roomCode = new URLSearchParams(window.location.search)
     .get("room")
@@ -379,10 +933,12 @@ function SpectatorApp() {
 }
 
 function SpectatorNotice({
+  eyebrow = "LIVE SPECTATOR",
   title,
   description,
   retry = false,
 }: {
+  eyebrow?: string;
   title: string;
   description: string;
   retry?: boolean;
@@ -391,7 +947,7 @@ function SpectatorNotice({
     <main className="public-page spectator-notice page-enter">
       <BrandHomeLink className="public-wordmark" />
       <div>
-        <p className="eyebrow">LIVE SPECTATOR</p>
+        <p className="eyebrow">{eyebrow}</p>
         <h1>{title}</h1>
         <p>{description}</p>
         {retry && (
@@ -1351,7 +1907,13 @@ function Lobby({
 }
 
 // 트랙을 미리 보여준 채로 숫자만 위에 겹칩니다.
-function CountdownOverlay({ room }: { room: RoomSnapshot }) {
+function CountdownOverlay({
+  room,
+  browserInput = false,
+}: {
+  room: RoomSnapshot;
+  browserInput?: boolean;
+}) {
   const [clockOffset] = useState(() => room.serverNow - Date.now());
   const [now, setNow] = useState(() => Date.now() + clockOffset);
   useEffect(() => {
@@ -1370,9 +1932,11 @@ function CountdownOverlay({ room }: { room: RoomSnapshot }) {
   return (
     <div className="countdown-overlay" aria-live="assertive">
       <p>
-        {room.demo && !room.demoHumanSlot
-          ? "자동 주자를 준비하고 있습니다"
-          : "손가락을 그대로 유지하세요"}
+        {browserInput
+          ? "스페이스바 또는 박동 버튼을 준비하세요"
+          : room.demo && !room.demoHumanSlot
+            ? "자동 주자를 준비하고 있습니다"
+            : "손가락을 그대로 유지하세요"}
       </p>
       <div className="countdown-number-slot">
         <div
@@ -1417,6 +1981,9 @@ function Race({
   countingDown = false,
   finishing = false,
   readOnly = false,
+  stageHint,
+  browserInput = false,
+  inputControl,
 }: {
   room: RoomSnapshot;
   beatEffects: Record<string, AcceptedBeat>;
@@ -1429,6 +1996,9 @@ function Race({
   countingDown?: boolean;
   finishing?: boolean;
   readOnly?: boolean;
+  stageHint?: string;
+  browserInput?: boolean;
+  inputControl?: React.ReactNode;
 }) {
   const leader = useMemo(() => room.players[0], [room.players]);
   const isStadiumRace =
@@ -1451,15 +2021,16 @@ function Race({
         </button>
       )}
       <p className="stage-hint">
-        {room.demoHumanSlot
-          ? "앱 참가자의 손가락 측정을 확인하세요"
-          : room.demo
-            ? "자동 주자의 출발 준비가 완료되었습니다"
-            : "모든 팀이 손가락을 올렸는지 확인하세요"}
+        {stageHint ??
+          (room.demoHumanSlot
+            ? "앱 참가자의 손가락 측정을 확인하세요"
+            : room.demo
+              ? "자동 주자의 출발 준비가 완료되었습니다"
+              : "모든 팀이 손가락을 올렸는지 확인하세요")}
       </p>
     </div>
   ) : countingDown ? (
-    <CountdownOverlay room={room} />
+    <CountdownOverlay room={room} browserInput={browserInput} />
   ) : null;
   return (
     <section
@@ -1507,14 +2078,16 @@ function Race({
           {!readOnly &&
             !finishing &&
             (staged ? (
-              <button
-                className="end-race-button"
-                type="button"
-                onClick={onLeaveStage}
-                disabled={busy}
-              >
-                대기 화면으로
-              </button>
+              onLeaveStage ? (
+                <button
+                  className="end-race-button"
+                  type="button"
+                  onClick={onLeaveStage}
+                  disabled={busy}
+                >
+                  대기 화면으로
+                </button>
+              ) : null
             ) : countingDown ? (
               <EndRaceButton
                 busy={busy}
@@ -1530,7 +2103,12 @@ function Race({
       </div>
 
       {isStadiumRace ? (
-        <StadiumRace room={room} beatEffects={beatEffects} overlay={overlay} />
+        <StadiumRace
+          room={room}
+          beatEffects={beatEffects}
+          overlay={overlay}
+          inputControl={inputControl}
+        />
       ) : (
         <div className="track-list">
           {overlay}
@@ -1667,10 +2245,12 @@ function StadiumRace({
   room,
   beatEffects,
   overlay = null,
+  inputControl,
 }: {
   room: RoomSnapshot;
   beatEffects: Record<string, AcceptedBeat>;
   overlay?: React.ReactNode;
+  inputControl?: React.ReactNode;
 }) {
   // room.players는 순위 순서라 매 박동마다 뒤바뀝니다. 레인은 입장 순서로 고정합니다.
   const lanes = room.players
@@ -1697,7 +2277,7 @@ function StadiumRace({
   const infieldCenterX = (STADIUM_LEFT_CENTER + STADIUM_RIGHT_CENTER) / 2;
 
   return (
-    <div className="stadium-race">
+    <div className={`stadium-race ${inputControl ? "has-input-control" : ""}`}>
       <ol
         className="rank-board"
         style={{ height: `calc(var(--rank-row) * ${lanes.length})` }}
@@ -1881,6 +2461,8 @@ function StadiumRace({
         </svg>
         {overlay}
       </div>
+
+      {inputControl}
 
       <div className="stadium-scoreboard">
         {/* 전시 화면에서는 현재 주자의 BPM만 크게 읽히면 됩니다. 순위·박동 수는

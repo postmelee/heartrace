@@ -1761,6 +1761,97 @@ button {
   grid-column: 1;
   grid-row: 1;
 }
+.browser-beat-rail {
+  min-width: 0;
+  grid-column: 3;
+  grid-row: 1;
+  align-self: center;
+  display: grid;
+  justify-items: stretch;
+  gap: 8px;
+  text-align: center;
+}
+.browser-beat-kicker {
+  color: var(--muted);
+  font-size: clamp(9px, 0.68vw, 11px);
+  font-weight: 800;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+}
+.browser-beat-button {
+  width: 100%;
+  min-height: clamp(132px, 21vh, 206px);
+  padding: 16px 10px;
+  border: 1px solid color-mix(in srgb, var(--moss) 38%, var(--line));
+  border-radius: 24px;
+  background: var(--moss);
+  box-shadow: 0 14px 32px rgb(168 47 73 / 20%);
+  color: #fff;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  cursor: pointer;
+  touch-action: manipulation;
+  transition:
+    transform 140ms var(--ease-out),
+    box-shadow 140ms ease,
+    background 140ms ease;
+}
+.browser-beat-button:hover:not(:disabled) {
+  transform: translateY(-2px);
+  box-shadow: 0 18px 38px rgb(168 47 73 / 28%);
+}
+.browser-beat-button:active:not(:disabled) {
+  transform: scale(0.965);
+}
+.browser-beat-button:focus-visible {
+  outline: 4px solid color-mix(in srgb, var(--moss) 35%, white);
+  outline-offset: 4px;
+}
+.browser-beat-button:disabled {
+  border-color: var(--line);
+  background: color-mix(in srgb, var(--paper) 76%, var(--line));
+  box-shadow: none;
+  color: var(--muted);
+  cursor: not-allowed;
+}
+.browser-beat-heart {
+  width: clamp(34px, 3.2vw, 48px);
+  color: currentColor;
+  line-height: 0;
+}
+.browser-beat-heart svg {
+  width: 100%;
+  height: auto;
+  fill: currentColor;
+}
+.browser-beat-button:not(:disabled) .browser-beat-heart {
+  animation: browser-heart-pulse 900ms ease-in-out infinite alternate;
+}
+.browser-beat-button strong {
+  font-size: clamp(14px, 1.05vw, 17px);
+  line-height: 1.2;
+}
+.browser-beat-button small {
+  font-size: clamp(9px, 0.68vw, 11px);
+  font-weight: 750;
+  letter-spacing: 0.04em;
+  line-height: 1.25;
+}
+.browser-beat-progress,
+.browser-beat-notice {
+  margin: 0;
+  color: var(--muted);
+  font-size: clamp(9px, 0.66vw, 11px);
+  font-weight: 650;
+  line-height: 1.35;
+}
+.browser-beat-notice {
+  min-height: 2.7em;
+  color: var(--ink);
+}
 .stadium-field > svg {
   position: absolute;
   inset: 0;
@@ -2412,6 +2503,15 @@ button {
   }
 }
 
+@keyframes browser-heart-pulse {
+  from {
+    transform: scale(0.94);
+  }
+  to {
+    transform: scale(1.08);
+  }
+}
+
 @media (max-width: 760px) {
   .desktop-only {
     display: none;
@@ -2496,6 +2596,50 @@ button {
   }
   .stadium-field {
     min-height: 40vh;
+  }
+  .stadium-race.has-input-control {
+    grid-template-columns: minmax(0, 1fr);
+    grid-template-rows: minmax(40vh, 1fr) auto auto;
+  }
+  .stadium-race.has-input-control .rank-board {
+    display: none;
+  }
+  .stadium-race.has-input-control .stadium-field {
+    grid-column: 1;
+    grid-row: 1;
+  }
+  .stadium-race.has-input-control .browser-beat-rail {
+    grid-column: 1;
+    grid-row: 2;
+    display: grid;
+    grid-template-columns: auto minmax(0, 1fr);
+    align-items: center;
+    gap: 6px 10px;
+  }
+  .stadium-race.has-input-control .browser-beat-kicker,
+  .stadium-race.has-input-control .browser-beat-progress {
+    display: none;
+  }
+  .stadium-race.has-input-control .browser-beat-button {
+    min-height: 58px;
+    padding: 9px 18px;
+    border-radius: 18px;
+    flex-direction: row;
+    gap: 10px;
+  }
+  .stadium-race.has-input-control .browser-beat-heart {
+    width: 30px;
+  }
+  .stadium-race.has-input-control .browser-beat-button small {
+    margin-left: auto;
+  }
+  .stadium-race.has-input-control .browser-beat-notice {
+    min-height: 0;
+    text-align: left;
+  }
+  .stadium-race.has-input-control .stadium-scoreboard {
+    grid-column: 1;
+    grid-row: 3;
   }
   .stadium-scoreboard {
     grid-template-columns: repeat(2, minmax(0, 1fr));
