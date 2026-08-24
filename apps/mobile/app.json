@@ -7,6 +7,7 @@
     "scheme": "heartrace",
     "orientation": "portrait",
     "userInterfaceStyle": "light",
+    "backgroundColor": "#FFF9F6",
     "runtimeVersion": {
       "policy": "fingerprint"
     },
@@ -23,6 +24,10 @@
     "android": {
       "package": "art.heartrace.mobile",
       "versionCode": 1,
+      "adaptiveIcon": {
+        "foregroundImage": "./assets/adaptive-icon.png",
+        "backgroundColor": "#FFF9F6"
+      },
       "permissions": ["android.permission.CAMERA"]
     },
     "plugins": ["expo-font"],
