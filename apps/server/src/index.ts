@@ -437,7 +437,7 @@ function populateDemoRoom(room: RoomState): void {
       id: playerId,
       token: createToken(),
       socketId: `mock:${playerId}`,
-      nickname: `MOCK ${mockIndex}팀`,
+      nickname: `자동 주자 ${mockIndex}팀`,
       runnerNames: Array.from(
         { length: settings.runnersPerTeam },
         (_, runnerIndex) => `${runnerIndex + 1}번 주자`,

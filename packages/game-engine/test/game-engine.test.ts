@@ -91,7 +91,7 @@ function beat(sequence: number, overrides: Partial<BeatEvent> = {}): BeatEvent {
 }
 
 describe("심박 경주 규칙", () => {
-  it("촬영용 모의 경기의 실제 참가자 슬롯을 스냅샷에 보존한다", () => {
+  it("1인 체험 경기의 앱 참가자 슬롯을 스냅샷에 보존한다", () => {
     const room = createRoomState({
       code: "FILM",
       hostToken: "host-token",
