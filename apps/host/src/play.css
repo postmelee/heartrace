@@ -10,8 +10,16 @@
   padding: clamp(18px, 3vw, 42px) clamp(18px, 4vw, 64px) 24px;
   color: var(--play-ink);
   background:
-    radial-gradient(circle at 82% 12%, rgba(217, 79, 103, 0.18), transparent 28%),
-    radial-gradient(circle at 14% 88%, rgba(117, 169, 135, 0.2), transparent 30%),
+    radial-gradient(
+      circle at 82% 12%,
+      rgba(217, 79, 103, 0.18),
+      transparent 28%
+    ),
+    radial-gradient(
+      circle at 14% 88%,
+      rgba(117, 169, 135, 0.2),
+      transparent 30%
+    ),
     var(--play-paper);
 }
 
@@ -206,108 +214,199 @@
   letter-spacing: -0.04em;
 }
 
-.play-track-list {
-  margin-top: clamp(44px, 7vh, 72px);
-  display: grid;
-  gap: 40px;
+.play-stadium-section {
+  margin-top: 22px;
 }
 
-.play-lane-label {
-  display: flex;
-  align-items: baseline;
-  justify-content: space-between;
-  gap: 14px;
-}
-
-.play-lane-label strong {
-  font-size: 14px;
-}
-
-.play-lane-label span {
-  color: rgba(38, 24, 29, 0.55);
-  font-size: 12px;
-  font-variant-numeric: tabular-nums;
-}
-
-.play-lane-track {
+.play-stadium {
   position: relative;
-  height: 48px;
-  margin-top: 12px;
-  border-radius: 18px;
-  background:
-    repeating-linear-gradient(90deg, transparent 0 11%, rgba(255, 255, 255, 0.56) 11% 11.6%),
-    #ead7cf;
+  width: min(720px, 100%);
+  aspect-ratio: 2 / 1;
+  margin-inline: auto;
 }
 
-.play-lane.is-rival .play-lane-track {
-  background:
-    repeating-linear-gradient(90deg, transparent 0 11%, rgba(255, 255, 255, 0.62) 11% 11.6%),
-    var(--play-mint);
+.play-stadium-track {
+  width: 100%;
+  height: 100%;
+  overflow: visible;
 }
 
-.play-start-line,
-.play-finish-line {
-  position: absolute;
-  top: 50%;
-  z-index: 1;
-  color: rgba(38, 24, 29, 0.4);
-  font-size: 9px;
+.play-stadium-field {
+  fill: rgba(117, 169, 135, 0.14);
+  stroke: rgba(67, 116, 83, 0.13);
+  stroke-width: 2;
+}
+
+.play-stadium-lane,
+.play-stadium-progress {
+  fill: none;
+}
+
+.play-stadium-lane {
+  stroke-width: 24;
+}
+
+.play-stadium-lane.is-player {
+  stroke: #efd4ce;
+}
+
+.play-stadium-lane.is-mint {
+  stroke: #dcebdc;
+}
+
+.play-stadium-lane.is-amber {
+  stroke: #eee2c7;
+}
+
+.play-stadium-lane.is-plum {
+  stroke: #e8dbe0;
+}
+
+.play-stadium-progress {
+  stroke-width: 8;
+  stroke-linecap: round;
+  transition: stroke-dasharray 180ms cubic-bezier(0.2, 0, 0, 1);
+}
+
+.play-stadium-progress.is-player {
+  stroke: var(--play-red);
+}
+
+.play-stadium-progress.is-mint {
+  stroke: #5d9671;
+}
+
+.play-stadium-progress.is-amber {
+  stroke: #b98a3d;
+}
+
+.play-stadium-progress.is-plum {
+  stroke: #8f6678;
+}
+
+.play-stadium-finish {
+  stroke: rgba(38, 24, 29, 0.42);
+  stroke-width: 3;
+  stroke-dasharray: 7 6;
+}
+
+.play-stadium-finish-label {
+  fill: rgba(38, 24, 29, 0.5);
+  font-size: 11px;
   font-weight: 800;
   letter-spacing: 0.08em;
-  transform: translateY(-50%);
 }
 
-.play-start-line {
-  left: 10px;
+.play-stadium-center-copy {
+  fill: rgba(38, 24, 29, 0.78);
+  font-size: 17px;
+  font-weight: 800;
+  letter-spacing: -0.04em;
+  text-anchor: middle;
 }
 
-.play-finish-line {
-  right: 8px;
+.play-stadium-center-copy.is-sub {
+  fill: var(--play-red);
+  font-size: 13px;
 }
 
-.play-distance {
+.play-stadium-racer {
   position: absolute;
-  left: 7%;
-  top: 0;
-  bottom: 0;
-  max-width: 86%;
-  border-radius: 18px;
-  background: rgba(217, 79, 103, 0.2);
-  transition: width 180ms cubic-bezier(0.2, 0, 0, 1);
-}
-
-.play-lane.is-rival .play-distance {
-  background: rgba(67, 116, 83, 0.18);
-}
-
-.play-racer {
-  position: absolute;
-  top: 50%;
   z-index: 2;
-  width: 48px;
-  height: 48px;
+  width: 42px;
+  height: 38px;
   color: var(--play-red);
-  filter: drop-shadow(0 7px 9px rgba(90, 29, 43, 0.2));
+  filter: drop-shadow(0 7px 9px rgba(90, 29, 43, 0.22));
   transform: translate(-50%, -50%);
-  transition: left 180ms cubic-bezier(0.2, 0, 0, 1);
+  transition:
+    left 180ms cubic-bezier(0.2, 0, 0, 1),
+    top 180ms cubic-bezier(0.2, 0, 0, 1);
 }
 
-.play-racer svg {
+.play-stadium-racer.is-mint {
+  color: #5d9671;
+}
+
+.play-stadium-racer.is-amber {
+  color: #b98a3d;
+}
+
+.play-stadium-racer.is-plum {
+  color: #8f6678;
+}
+
+.play-stadium-racer-heart {
+  display: block;
+  width: 100%;
+  height: 100%;
+  animation: play-runner-step 220ms cubic-bezier(0.175, 0.885, 0.32, 1.275) both;
+}
+
+.play-stadium-racer svg {
   width: 100%;
   height: 100%;
 }
 
-.play-lane.is-rival .play-racer {
-  color: #5d9671;
+.play-stadium-racer .heart-wave {
+  stroke: #fff9f6;
 }
 
-.play-racer .heart-wave {
-  stroke: #fff9f6;
+.play-stadium-scoreboard {
+  margin: 8px 0 0;
+  padding: 0;
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 7px;
+  list-style: none;
+}
+
+.play-stadium-scoreboard li {
+  min-width: 0;
+  padding: 9px 10px;
+  border: 1px solid rgba(38, 24, 29, 0.1);
+  border-radius: 13px;
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 7px;
+  background: rgba(255, 255, 255, 0.56);
+}
+
+.play-stadium-scoreboard i {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--play-red);
+}
+
+.play-stadium-scoreboard .is-mint i {
+  background: #5d9671;
+}
+
+.play-stadium-scoreboard .is-amber i {
+  background: #b98a3d;
+}
+
+.play-stadium-scoreboard .is-plum i {
+  background: #8f6678;
+}
+
+.play-stadium-scoreboard strong {
+  overflow: hidden;
+  font-size: 11px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.play-stadium-scoreboard span {
+  color: rgba(38, 24, 29, 0.54);
+  font-size: 10px;
+  font-variant-numeric: tabular-nums;
 }
 
 .play-control-zone {
   min-height: 150px;
-  margin-top: 54px;
+  margin-top: 24px;
   display: grid;
   place-items: center;
 }
@@ -331,7 +430,9 @@
   justify-content: space-between;
   font-size: 17px;
   font-weight: 800;
-  transition: transform 120ms cubic-bezier(0.2, 0, 0, 1), box-shadow 180ms ease;
+  transition:
+    transform 120ms cubic-bezier(0.2, 0, 0, 1),
+    box-shadow 180ms ease;
 }
 
 .play-start-button:hover,
@@ -349,7 +450,8 @@
   display: grid;
   justify-items: center;
   gap: 4px;
-  animation: play-countdown-pop 360ms cubic-bezier(0.175, 0.885, 0.32, 1.275) both;
+  animation: play-countdown-pop 360ms cubic-bezier(0.175, 0.885, 0.32, 1.275)
+    both;
 }
 
 .play-countdown strong {
@@ -375,7 +477,9 @@
   gap: 18px;
   user-select: none;
   touch-action: manipulation;
-  transition: transform 120ms cubic-bezier(0.2, 0, 0, 1), box-shadow 180ms ease;
+  transition:
+    transform 120ms cubic-bezier(0.2, 0, 0, 1),
+    box-shadow 180ms ease;
 }
 
 .play-beat-button:hover,
@@ -511,6 +615,18 @@
   }
 }
 
+@keyframes play-runner-step {
+  0% {
+    transform: scale(0.86) rotate(-3deg);
+  }
+  58% {
+    transform: scale(1.16) rotate(2deg);
+  }
+  100% {
+    transform: scale(1) rotate(0);
+  }
+}
+
 @keyframes play-countdown-pop {
   from {
     opacity: 0;
@@ -604,14 +720,17 @@
     display: none;
   }
 
-  .play-track-list {
-    margin-top: 46px;
-    gap: 34px;
+  .play-stadium-section {
+    margin-top: 26px;
   }
 
-  .play-racer {
-    width: 42px;
-    height: 42px;
+  .play-stadium-racer {
+    width: 34px;
+    height: 31px;
+  }
+
+  .play-stadium-scoreboard {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 
   .play-control-zone {
@@ -634,7 +753,13 @@
 
 @media (prefers-reduced-motion: reduce) {
   .play-card::before,
-  .play-card::after {
+  .play-card::after,
+  .play-stadium-racer-heart {
     animation: none;
+  }
+
+  .play-stadium-progress,
+  .play-stadium-racer {
+    transition: none;
   }
 }
