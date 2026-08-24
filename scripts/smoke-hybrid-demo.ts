@@ -17,14 +17,14 @@ async function main(): Promise<void> {
 
   try {
     const created = await createRoom(host);
-    assert(created.room.demo, "촬영용 방은 모의 경기여야 합니다.");
+    assert(created.room.demo, "1인 체험 방은 자동 주자 경기여야 합니다.");
     assert(
       created.room.demoHumanSlot,
-      "촬영용 방에는 실제 참가자 슬롯이 있어야 합니다.",
+      "1인 체험 방에는 앱 참가자 슬롯이 있어야 합니다.",
     );
     assert(
       created.room.players.length === 0,
-      "실제 참가자가 첫 번째 레인을 차지할 때까지 mock 팀을 만들면 안 됩니다.",
+      "앱 참가자가 첫 번째 레인을 차지할 때까지 자동 주자를 만들면 안 됩니다.",
     );
 
     const joined = await player.timeout(5_000).emitWithAck("player:join", {
@@ -37,7 +37,7 @@ async function main(): Promise<void> {
     const joinedRoom = joined.data.room;
     assert(
       joinedRoom.players.length === 3,
-      "남은 두 자리를 mock 팀이 채워야 합니다.",
+      "남은 두 자리를 자동 주자가 채워야 합니다.",
     );
     const human = joinedRoom.players.find(
       (candidate) => candidate.id === joined.data.playerId,
@@ -49,10 +49,10 @@ async function main(): Promise<void> {
     const bots = joinedRoom.players.filter((candidate) =>
       candidate.id.startsWith(`mock-${joinedRoom.code}-`),
     );
-    assert(bots.length === 2, "mock 팀 두 개가 생성되어야 합니다.");
+    assert(bots.length === 2, "자동 주자 팀 두 개가 생성되어야 합니다.");
     assert(
       bots.every((candidate) => candidate.ready && candidate.connected),
-      "mock 팀은 즉시 출발 준비 상태여야 합니다.",
+      "자동 주자는 즉시 출발 준비 상태여야 합니다.",
     );
     assert(
       !human.ready,
@@ -127,7 +127,7 @@ async function main(): Promise<void> {
 
     await endRace(host, created);
     console.log(
-      `촬영용 혼합 데모 통과: ${created.room.code}, 실제 1팀 + mock 2팀`,
+      `1인 체험 경기 통과: ${created.room.code}, 앱 참가자 1팀 + 자동 주자 2팀`,
     );
   } finally {
     player.disconnect();
@@ -191,7 +191,7 @@ function waitForRoom(
     const timer = setTimeout(() => {
       socket.off("room:snapshot", onSnapshot);
       reject(
-        new Error("촬영용 데모 상태 변경을 기다리다 시간이 초과되었습니다."),
+        new Error("1인 체험 경기 상태 변경을 기다리다 시간이 초과되었습니다."),
       );
     }, timeoutMs);
     const onSnapshot = (room: RoomSnapshot) => {

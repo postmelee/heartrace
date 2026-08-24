@@ -486,8 +486,8 @@ function PrivacyPage() {
   return (
     <PublicDocument title="개인정보 처리방침">
       <p>
-        심장달리기는 참여형 전시의 실시간 경주 진행을 위해 방 코드, 참가자가
-        입력한 닉네임, 측정 BPM, 신호 품질 및 박동 이벤트를 서버로 전송합니다.
+        심장달리기는 실시간 경주 게임 진행을 위해 방 코드, 참가자가 입력한
+        닉네임, 측정 BPM, 신호 품질 및 박동 이벤트를 서버로 전송합니다.
       </p>
       <h2>카메라 데이터</h2>
       <p>
@@ -507,7 +507,7 @@ function PrivacyPage() {
         권한은 iPhone 설정에서 언제든 철회할 수 있습니다.
       </p>
       <p className="document-note">
-        이 앱은 의료 진단이나 치료 목적이 아닌 예술 작품의 게임 입력 도구입니다.
+        이 앱은 의료 진단이나 치료 목적이 아닌 엔터테인먼트용 게임입니다.
       </p>
     </PublicDocument>
   );
@@ -533,7 +533,7 @@ function SupportPage() {
         어지러움을 느끼면 즉시 참여를 중단해 주세요.
       </p>
       <p className="document-note">
-        추가 지원이 필요하면 전시장 운영자에게 문의해 주세요.
+        추가 지원이 필요하면 게임 호스트에게 문의해 주세요.
       </p>
     </PublicDocument>
   );
@@ -641,7 +641,7 @@ function Home({
           {demo ? (
             <>
               <LiveDot live={connected} />
-              {isHybridDemo ? "촬영용 LIVE + MOCK" : "자동 경기 데모"}
+              {isHybridDemo ? "1인 체험 모드" : "자동 경기 모드"}
             </>
           ) : (
             <>실시간 심장 박동 레이스</>
@@ -650,18 +650,18 @@ function Home({
       </header>
       <div className="home-copy">
         <p className="display-category">
-          {isHybridDemo ? "RECORDING MODE" : demo ? "AUTO RACE" : "LIVE GAME"}
+          {isHybridDemo ? "SOLO PLAY" : demo ? "AUTO PLAY" : "LIVE GAME"}
         </p>
         <p className="session-line">
           <strong>심장달리기</strong>
-          {demo && (isHybridDemo ? " · 직접 참여 + MOCK" : " · 가상 박동 모드")}
+          {demo && (isHybridDemo ? " · 나 + 자동 주자" : " · 자동 주자 모드")}
         </p>
         <h1>
           {isHybridDemo ? (
             <>
               나는 직접 뛰고,
               <br />
-              나머지는 봇이 달립니다.
+              나머지는 자동 주자가 달립니다.
             </>
           ) : demo ? (
             <>
@@ -679,9 +679,10 @@ function Home({
         <p className="home-description">
           {isHybridDemo ? (
             <>
-              한 팀은 실제 휴대폰 심박으로 참여하고 나머지 팀은 서버가 채웁니다.
-              <br className="desktop-only" /> 실제 경기 흐름을 그대로 진행하며
-              화면을 녹화할 수 있습니다.
+              내 휴대폰 심박으로 한 팀에 참여하고 나머지 팀은 자동 주자가
+              채웁니다.
+              <br className="desktop-only" /> 혼자서도 실제 경기 흐름을 처음부터
+              끝까지 체험할 수 있습니다.
             </>
           ) : demo ? (
             <>
@@ -721,7 +722,7 @@ function Home({
             <div
               className="mode-picker demo-mode-picker"
               role="group"
-              aria-label="데모 참가 구성"
+              aria-label="1인 체험 참가 구성"
             >
               <button
                 type="button"
@@ -729,7 +730,7 @@ function Home({
                 aria-pressed={demoHumanSlot}
                 onClick={() => setDemoHumanSlot(true)}
               >
-                내가 참여 + MOCK
+                내가 참여 + 자동 주자
               </button>
               <button
                 type="button"
@@ -737,7 +738,7 @@ function Home({
                 aria-pressed={!demoHumanSlot}
                 onClick={() => setDemoHumanSlot(false)}
               >
-                전체 MOCK 자동
+                자동 주자만
               </button>
             </div>
           )}
@@ -830,9 +831,9 @@ function Home({
           {busy
             ? "경기장 만드는 중…"
             : isHybridDemo
-              ? "촬영용 경기 만들기"
+              ? "1인 체험 경기 만들기"
               : demo
-                ? "모의 경기 만들기"
+                ? "자동 경기 만들기"
                 : "새 경기 만들기"}
           <ArrowIcon />
         </button>
@@ -842,7 +843,7 @@ function Home({
               브라우저로 바로 플레이
             </a>
             <a className="demo-entry" href="/demo">
-              촬영 · 자동 경기 모드
+              혼자 체험하기
             </a>
           </>
         )}
@@ -854,7 +855,7 @@ function Home({
       </div>
       <p className="edition">
         {isHybridDemo
-          ? "실제 참가자 한 자리와 서버 생성 mock 팀으로 진행합니다."
+          ? "내 참가 자리 한 곳과 자동 주자 팀으로 진행합니다."
           : demo
             ? "가상 박동은 의료 측정값이 아닙니다."
             : "박동 한 번이 한 걸음이 되는 실시간 경주"}
@@ -1068,7 +1069,7 @@ function TopBar({
             )}
             {demo && (
               <span className="demo-label">
-                {demoHumanSlot ? "LIVE + MOCK" : "MOCK"}
+                {demoHumanSlot ? "1인 체험" : "자동 경기"}
               </span>
             )}
             <span>방 {code}</span>
@@ -1088,9 +1089,9 @@ function TopBar({
                 onToggleImmersive();
               }}
               aria-pressed={immersive}
-              title="전시 모드 (H)"
+              title="몰입 모드 (H)"
             >
-              <span>{immersive ? "헤더 고정" : "전시 모드"}</span>
+              <span>{immersive ? "헤더 고정" : "몰입 모드"}</span>
             </button>
           )}
         </div>
@@ -1137,10 +1138,10 @@ function Lobby({
           <p className="eyebrow">
             {isHybridDemo
               ? room.players.length > 0
-                ? "실제 팀과 mock 팀이 함께 준비하고 있습니다"
-                : "휴대폰으로 실제 참가자 한 자리를 채워 주세요"
+                ? "참가자와 자동 주자가 함께 준비하고 있습니다"
+                : "휴대폰으로 참가자 한 자리를 채워 주세요"
               : room.demo
-                ? "가상 팀의 준비가 완료되었습니다"
+                ? "자동 주자의 준비가 완료되었습니다"
                 : isRelay
                   ? "각 팀의 대표 휴대폰에서 방 코드를 입력하세요"
                   : "휴대폰에서 방 코드를 입력하세요"}
@@ -1153,15 +1154,15 @@ function Lobby({
           </p>
           <p className="join-help">
             {isHybridDemo
-              ? "심장달리기 앱으로 입장하면 나머지 자리는 mock 팀이 자동으로 채웁니다."
+              ? "심장달리기 앱으로 입장하면 나머지 자리는 자동 주자가 채웁니다."
               : room.demo
                 ? "경기 시작을 누르면 서버가 팀마다 서로 다른 가상 심박을 발생시킵니다."
                 : `심장달리기 앱을 열고 ${isRelay ? "팀 이름" : "닉네임"}과 코드를 입력하세요.`}
           </p>
         </div>
         {room.demo && !room.demoHumanSlot ? (
-          <div className="demo-room-mark" aria-label="모의 경기">
-            MOCK
+          <div className="demo-room-mark" aria-label="자동 경기">
+            AUTO
           </div>
         ) : (
           <div className="qr-frame" aria-label="앱 입장 QR 코드">
@@ -1288,7 +1289,7 @@ function Lobby({
               <span className="scan-line" />
               <p>
                 {isHybridDemo
-                  ? "실제 참가자의 입장을 기다리고 있어요"
+                  ? "앱 참가자의 입장을 기다리고 있어요"
                   : "첫 번째 심장을 기다리고 있어요"}
               </p>
             </div>
@@ -1337,8 +1338,8 @@ function Lobby({
                   : "경기장 입장"
                 : isHybridDemo
                   ? room.players.length === 0
-                    ? "실제 참가자 입장을 기다리는 중"
-                    : "실제 심박 측정을 기다리는 중"
+                    ? "앱 참가자 입장을 기다리는 중"
+                    : "심박 측정을 기다리는 중"
                   : "모두의 측정을 기다리는 중"}
               {allReady && <ArrowIcon />}
             </button>
@@ -1370,7 +1371,7 @@ function CountdownOverlay({ room }: { room: RoomSnapshot }) {
     <div className="countdown-overlay" aria-live="assertive">
       <p>
         {room.demo && !room.demoHumanSlot
-          ? "가상 박동을 준비하고 있습니다"
+          ? "자동 주자를 준비하고 있습니다"
           : "손가락을 그대로 유지하세요"}
       </p>
       <div className="countdown-number-slot">
@@ -1451,9 +1452,9 @@ function Race({
       )}
       <p className="stage-hint">
         {room.demoHumanSlot
-          ? "실제 참가자의 손가락 측정을 확인하세요"
+          ? "앱 참가자의 손가락 측정을 확인하세요"
           : room.demo
-            ? "mock 팀의 출발 준비가 완료되었습니다"
+            ? "자동 주자의 출발 준비가 완료되었습니다"
             : "모든 팀이 손가락을 올렸는지 확인하세요"}
       </p>
     </div>
@@ -1480,16 +1481,16 @@ function Race({
                   : finishing
                     ? "경기 종료"
                     : room.demoHumanSlot
-                      ? "LIVE + MOCK 경기 중"
+                      ? "1인 체험 경기 중"
                       : room.demo
-                        ? "모의 경기 중"
+                        ? "자동 경기 중"
                         : "경기 중"}
             </p>
           </div>
           {!isStadiumRace && (
             <h1>
               {room.demoHumanSlot
-                ? "나의 심장과 봇이 함께 달립니다"
+                ? "나의 심장과 자동 주자가 함께 달립니다"
                 : room.demo
                   ? "가상 심장이 달리고 있습니다"
                   : "심장이 달리고 있습니다"}

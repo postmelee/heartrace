@@ -235,13 +235,13 @@ export default function PlayChallenge() {
 
       <footer className="play-footer">
         <p>
-          실제 전시 버전은 스마트폰 카메라로 감지한 심장 박동을 입력으로
+          모바일 앱에서는 스마트폰 카메라로 감지한 심장 박동을 입력으로
           사용합니다. 카메라 영상은 저장하거나 전송하지 않습니다.
         </p>
         <div>
           <a href="/privacy">개인정보 안내</a>
           <a href="/notices">오픈소스 고지</a>
-          <a href="/demo">촬영 · 자동 경기 모드</a>
+          <a href="/demo">혼자 체험하기</a>
         </div>
       </footer>
     </main>

@@ -98,7 +98,7 @@ export interface RoomSnapshot {
   trackMode: TrackMode;
   /** 휴대폰 대신 서버가 박동을 생성하는 전시 리허설 방인지 여부 */
   demo: boolean;
-  /** 한 자리는 실제 휴대폰 참가자에게 남기고 나머지를 mock 팀으로 채우는지 여부 */
+  /** 한 자리는 앱 참가자에게 남기고 나머지를 서버 자동 주자로 채우는지 여부 */
   demoHumanSlot: boolean;
   relaySettings: RelayRoomSettings | null;
   /** 이 스냅샷을 만든 서버의 Unix epoch(ms). 클라이언트 시계 오차 보정용 */
