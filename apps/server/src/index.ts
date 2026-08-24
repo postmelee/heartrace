@@ -672,5 +672,5 @@ function fail<T>(ack: Ack<T>, error: unknown): void {
 
 const port = Number(process.env.PORT ?? 3001);
 httpServer.listen(port, "0.0.0.0", () => {
-  console.log(`Heart Race server: http://0.0.0.0:${port}`);
+  console.log(`심장달리기 server: http://0.0.0.0:${port}`);
 });

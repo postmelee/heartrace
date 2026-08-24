@@ -1,6 +1,6 @@
-# 심장 달리기 테스터 안내
+# 심장달리기 테스터 안내
 
-심장 달리기는 iPhone 카메라와 플래시로 감지한 박동을 이용해 경주하는 참여형 전시 게임입니다. 카메라 영상은 서버로 전송하거나 저장하지 않습니다.
+심장달리기는 iPhone 카메라와 플래시로 감지한 박동을 이용해 경주하는 참여형 게임입니다. 카메라 영상은 서버로 전송하거나 저장하지 않습니다.
 
 ## 준비물
 
@@ -11,8 +11,8 @@
 ## 설치 및 테스트
 
 1. iPhone에 TestFlight를 설치합니다.
-2. iPhone에서 [심장 달리기 TestFlight 초대 링크](https://testflight.apple.com/join/TJXqEQfy)를 엽니다.
-3. TestFlight에서 `심장 달리기`를 설치하고 카메라 권한을 허용합니다.
+2. iPhone에서 [심장달리기 TestFlight 초대 링크](https://testflight.apple.com/join/TJXqEQfy)를 엽니다.
+3. TestFlight에서 `심장달리기`를 설치하고 카메라 권한을 허용합니다.
 4. 노트북에서 [호스트 화면](https://heartrace-postmelee.onrender.com)을 열어 방을 만듭니다.
 5. iPhone 앱에 화면의 4자리 방 코드와 닉네임을 입력합니다.
 6. `측정 시작`을 누르고 후면 카메라와 플래시를 손가락으로 가볍게 덮습니다.

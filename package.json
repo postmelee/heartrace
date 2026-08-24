@@ -2,7 +2,7 @@
   "name": "heartrace",
   "version": "0.1.0",
   "private": true,
-  "description": "심장으로 달리는 참여형 전시 — Heart Race",
+  "description": "심장 박동 한 번이 한 걸음이 되는 실시간 경주 게임 — 심장달리기",
   "workspaces": [
     "apps/*",
     "packages/*"
